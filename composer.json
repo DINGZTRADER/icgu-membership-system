@@ -9,6 +9,29 @@
         "laravel/framework": "^11.0||^12.0",
         "livewire/livewire": "^3.0"
     },
+    "autoload": {
+        "psr-4": {
+            "App\\": "app/",
+            "Database\\Factories\\": "database/factories/",
+            "Database\\Seeders\\": "database/seeders/"
+        }
+    },
+    "scripts": {
+        "post-autoload-dump": [
+            "Illuminate\\Foundation\\ComposerScripts::postAutoloadDump",
+            "@php artisan package:discover --ansi"
+        ],
+        "post-root-package-install": [
+            "@php -r \"file_exists('.env') || copy('.env.example', '.env');\""
+        ],
+        "post-create-project-cmd": [
+            "@php artisan key:generate --ansi"
+        ],
+        "post-install-cmd": [
+            "@php artisan key:generate --force --ansi",
+            "@php artisan migrate:fresh --seed --force --ansi"
+        ]
+    },
     "config": {
         "optimize-autoloader": true,
         "preferred-install": "dist",
