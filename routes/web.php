@@ -2,7 +2,10 @@
 
 declare(strict_types=1);
 
+use App\Http\Controllers\MemberPortalAuthController;
+use App\Http\Controllers\MemberPortalController;
 use App\Http\Controllers\StaffMemberController;
+use App\Http\Controllers\StaffMemberPortalController;
 use App\Http\Controllers\StaffMembershipApplicationController;
 use App\Http\Controllers\StaffMembershipBillingController;
 use App\Http\Controllers\StaffMembershipDocumentController;
@@ -14,10 +17,35 @@ Route::get('/', function () {
     return view('welcome');
 });
 
+Route::prefix('member')->group(function (): void {
+    Route::post('/login', [MemberPortalAuthController::class, 'login'])->middleware('throttle:10,1');
+    Route::post('/invitations/{token}/accept', [MemberPortalAuthController::class, 'acceptInvitation'])->middleware('throttle:10,1');
+
+    Route::middleware('auth')->group(function (): void {
+        Route::post('/logout', [MemberPortalAuthController::class, 'logout']);
+        Route::get('/portal', [MemberPortalController::class, 'dashboard']);
+        Route::get('/portal/members/{member}', [MemberPortalController::class, 'show']);
+        Route::patch('/portal/members/{member}/profile', [MemberPortalController::class, 'updateProfile']);
+        Route::get('/portal/members/{member}/billing', [MemberPortalController::class, 'billing']);
+        Route::post('/portal/members/{member}/renewals', [MemberPortalController::class, 'startRenewal']);
+        Route::get('/portal/members/{member}/credential', [MemberPortalController::class, 'credential']);
+        Route::post('/portal/members/{member}/credential', [MemberPortalController::class, 'issueCredential']);
+        Route::get('/portal/members/{member}/credential.svg', [MemberPortalController::class, 'credentialSvg']);
+    });
+});
+
 Route::prefix('staff/membership')->middleware('auth')->group(function (): void {
     Route::middleware('permission:members.view')->group(function (): void {
         Route::get('/members', [StaffMemberController::class, 'index']);
         Route::get('/members/{member}', [StaffMemberController::class, 'show']);
+    });
+
+    Route::middleware('permission:portal.view')->group(function (): void {
+        Route::get('/members/{member}/portal', [StaffMemberPortalController::class, 'show']);
+    });
+
+    Route::middleware('permission:portal.manage')->group(function (): void {
+        Route::post('/members/{member}/portal/invitations', [StaffMemberPortalController::class, 'invite']);
     });
 
     Route::middleware('permission:renewals.view')->group(function (): void {
