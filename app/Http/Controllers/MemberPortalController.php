@@ -67,7 +67,7 @@ final class MemberPortalController extends Controller
 
     public function billing(Request $request, Member $member): JsonResponse
     {
-        $this->portal->assertAccess($request->user(), $member);
+        $this->portal->assertAccess($request->user(), $member, ['owner', 'representative', 'billing']);
         $member->load([
             'invoices.settlements',
             'payments.receipt',
@@ -85,7 +85,7 @@ final class MemberPortalController extends Controller
 
     public function startRenewal(Request $request, Member $member): JsonResponse
     {
-        $this->portal->assertAccess($request->user(), $member);
+        $this->portal->assertAccess($request->user(), $member, ['owner', 'representative', 'billing']);
         $renewal = $this->renewals->ensureRenewal($member, $request->user());
 
         return response()->json(['data' => $renewal->load(['invoice.settlements', 'sourcePeriod', 'resultingPeriod'])], 201);
@@ -93,19 +93,19 @@ final class MemberPortalController extends Controller
 
     public function credential(Request $request, Member $member): JsonResponse
     {
-        $this->portal->assertAccess($request->user(), $member);
+        $this->portal->assertAccess($request->user(), $member, ['owner', 'representative']);
         return response()->json(['data' => $this->credentials->active($member)]);
     }
 
     public function issueCredential(Request $request, Member $member): JsonResponse
     {
-        $this->portal->assertAccess($request->user(), $member);
+        $this->portal->assertAccess($request->user(), $member, ['owner', 'representative']);
         return response()->json(['data' => $this->credentials->issue($member, $request->user())], 201);
     }
 
     public function credentialSvg(Request $request, Member $member): Response
     {
-        $this->portal->assertAccess($request->user(), $member);
+        $this->portal->assertAccess($request->user(), $member, ['owner', 'representative']);
         $credential = $this->credentials->active($member);
         abort_if($credential === null, 404, 'No current digital membership credential has been issued.');
 
