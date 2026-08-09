@@ -30,8 +30,13 @@ final class ReconcilePendingMobileMoneyPayments extends Command
             ['Processed', $result['processed']],
             ['Successful', $result['successful']],
             ['Failed', $result['failed']],
+            ['Manual review required', $result['review_required']],
             ['Still pending', $result['pending']],
         ]);
+
+        if ($result['review_required'] > 0) {
+            $this->warn('One or more provider-successful payments require manual Finance reconciliation.');
+        }
 
         return self::SUCCESS;
     }
