@@ -1,4 +1,4 @@
-name: Sprint 1 Verification
+name: Sprint 2 Verification
 
 on:
   pull_request:
@@ -40,6 +40,7 @@ jobs:
       CACHE_STORE: array
       QUEUE_CONNECTION: sync
       LOG_CHANNEL: stderr
+      MEMBERSHIP_DOCUMENT_DISK: local
 
     steps:
       - name: Checkout
@@ -55,10 +56,10 @@ jobs:
       - name: Prepare environment
         run: cp .env.example .env
 
-      - name: Install dependencies
+      - name: Install locked dependencies
         run: composer install --no-interaction --prefer-dist --no-progress
 
-      - name: Validate Composer manifest
+      - name: Validate Composer manifest and lockfile
         run: composer validate --no-check-publish
 
       - name: Bootstrap private database schema
@@ -75,18 +76,25 @@ jobs:
       - name: Seed RBAC
         run: php artisan db:seed --class='Database\Seeders\RbacSeeder' --force
 
-      - name: Verify application boot
+      - name: Verify application and Sprint 2 domain
         run: |
           php artisan icgu:health
-          php artisan route:list
+          php artisan icgu:verify-sprint2
+          php artisan route:list --path=api/membership
+          php artisan route:list --path=staff/membership
 
-      - name: Verify schema and RBAC records
+      - name: Verify schema, plans and RBAC records
         env:
           PGPASSWORD: postgres
         run: |
           test "$(psql -At -h 127.0.0.1 -U postgres -d icgu_test -c 'select count(*) from icgu.roles')" -eq 7
-          test "$(psql -At -h 127.0.0.1 -U postgres -d icgu_test -c 'select count(*) from icgu.permissions')" -eq 9
-          psql -v ON_ERROR_STOP=1 -h 127.0.0.1 -U postgres -d icgu_test -c 'select count(*) from icgu.users'
+          test "$(psql -At -h 127.0.0.1 -U postgres -d icgu_test -c 'select count(*) from icgu.permissions')" -eq 16
+          test "$(psql -At -h 127.0.0.1 -U postgres -d icgu_test -c 'select count(*) from icgu.membership_plans')" -eq 5
+          test "$(psql -At -h 127.0.0.1 -U postgres -d icgu_test -c "select first_year_fee::int from icgu.membership_plans where code = 'individual'")" -eq 150000
+          test "$(psql -At -h 127.0.0.1 -U postgres -d icgu_test -c "select first_year_fee::int from icgu.membership_plans where code = 'corporate'")" -eq 2000000
+          psql -v ON_ERROR_STOP=1 -h 127.0.0.1 -U postgres -d icgu_test -c '\d icgu.membership_applications'
+          psql -v ON_ERROR_STOP=1 -h 127.0.0.1 -U postgres -d icgu_test -c '\d icgu.application_documents'
+          psql -v ON_ERROR_STOP=1 -h 127.0.0.1 -U postgres -d icgu_test -c '\d icgu.organisations'
 
       - name: Verify audit log immutability
         env:
