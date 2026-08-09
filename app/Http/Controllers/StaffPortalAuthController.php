@@ -32,7 +32,7 @@ final class StaffPortalAuthController extends Controller
             'email' => mb_strtolower($credentials['email']),
             'password' => $credentials['password'],
             'is_active' => true,
-        ], true)) {
+        ], false)) {
             throw ValidationException::withMessages(['email' => 'The supplied staff credentials are invalid.']);
         }
 
@@ -56,7 +56,7 @@ final class StaffPortalAuthController extends Controller
             $userId = $user->id;
             Auth::logout();
             $request->session()->put('staff_mfa_pending_user_id', $userId);
-            $request->session()->put('staff_mfa_pending_remember', true);
+            $request->session()->put('staff_mfa_pending_remember', false);
             return redirect()->route('staff.mfa.challenge');
         }
 
