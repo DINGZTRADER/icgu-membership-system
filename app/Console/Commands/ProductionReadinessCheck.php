@@ -51,6 +51,8 @@ final class ProductionReadinessCheck extends Command
             $this->check(! in_array(config('mail.default'), ['log', 'array'], true), 'Live email transport', 'Configure a live mail transport before go-live.', $strict);
             if (config('mail.default') === 'smtp') {
                 $this->check(trim((string) config('mail.mailers.smtp.host')) !== '', 'SMTP host', 'MAIL_HOST is required for SMTP.', $strict);
+                $scheme = trim((string) config('mail.mailers.smtp.scheme'));
+                $this->check($scheme === '' || in_array($scheme, ['smtp', 'smtps'], true), 'SMTP scheme', 'MAIL_SCHEME must be smtp, smtps, or left blank for Laravel to infer it from the port.', true);
             }
         }
 
