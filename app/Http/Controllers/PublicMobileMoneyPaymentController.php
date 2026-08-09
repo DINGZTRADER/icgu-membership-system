@@ -58,6 +58,12 @@ final class PublicMobileMoneyPaymentController extends Controller
     /** @return array<string,mixed> */
     private function payload(PaymentRequest $payment): array
     {
+        $message = match ($payment->status) {
+            'failed' => $payment->failure_reason,
+            'review_required' => 'MTN has verified the charge, but ICGU Finance must reconcile it before it can be credited. Do not submit the payment again.',
+            default => null,
+        };
+
         return [
             'provider' => $payment->provider,
             'reference' => $payment->external_reference,
@@ -66,7 +72,7 @@ final class PublicMobileMoneyPaymentController extends Controller
             'currency' => $payment->currency,
             'requested_at' => $payment->requested_at,
             'completed_at' => $payment->completed_at,
-            'failure_reason' => $payment->status === 'failed' ? $payment->failure_reason : null,
+            'message' => $message,
         ];
     }
 }
