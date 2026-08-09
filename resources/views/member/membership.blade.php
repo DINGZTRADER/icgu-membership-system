@@ -2,6 +2,7 @@
 @section('title','Membership')
 @section('page-title','Membership')
 @section('content')
+@php($credentialCurrent = $member->status?->code === 'ACTIVE' && $member->activeCredential?->is_valid)
 <div class="hero">
     <div><span class="eyebrow">{{ $member->membershipPlan?->name ?? 'ICGU Membership' }}</span><h2>{{ $member->display_name }}</h2><p>{{ $member->registration_number }} · Portal access: {{ ucfirst($account->access_role) }}</p></div>
     <span class="status {{ $member->status?->code === 'ACTIVE' ? 'ok' : 'bad' }}">{{ $member->status?->code ?? 'Unknown' }}</span>
@@ -21,14 +22,14 @@
 
     <section class="card">
         <div class="section-head"><h3>Digital credential</h3></div>
-        @if($member->activeCredential)
+        @if($credentialCurrent)
             <iframe class="credential-frame {{ $member->activeCredential->credential_type === 'certificate' ? 'certificate-frame' : '' }}" title="ICGU digital membership credential" src="{{ url('/member/portal/members/'.$member->id.'/credential.svg') }}"></iframe>
             <div class="actions">
                 <a class="btn btn-primary" target="_blank" href="{{ url('/member/portal/members/'.$member->id.'/credential.svg') }}">Open credential</a>
                 <a class="btn btn-outline" target="_blank" href="{{ route('membership.verify.page',$member->activeCredential->verification_code) }}">Verify publicly</a>
             </div>
         @elseif($member->status?->code === 'ACTIVE' && in_array($account->access_role,['owner','representative'],true))
-            <div class="empty"><p>Your current digital credential has not yet been issued.</p><form method="POST" action="{{ route('member.credential.issue',$member) }}">@csrf<button class="btn btn-accent" type="submit">Issue my digital credential</button></form></div>
+            <div class="empty"><p>Your current digital credential is not available yet or needs to be refreshed for the latest paid period.</p><form method="POST" action="{{ route('member.credential.issue',$member) }}">@csrf<button class="btn btn-accent" type="submit">Issue current digital credential</button></form></div>
         @else
             <div class="empty"><p>No current credential is available for this membership.</p></div>
         @endif
