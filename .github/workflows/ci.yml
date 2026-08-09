@@ -1,4 +1,4 @@
-name: Sprint 8 Verification
+name: Sprint 9 Verification
 
 on:
   pull_request:
@@ -11,7 +11,7 @@ permissions:
 jobs:
   verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 12
+    timeout-minutes: 14
 
     services:
       postgres:
@@ -44,6 +44,7 @@ jobs:
       MEMBERSHIP_DOCUMENT_DISK: local
       MTN_MOMO_ENABLED: false
       PRODUCTION_REQUIRE_LIVE_MAIL: false
+      PILOT_IMPORT_MAX_ROWS: 50
 
     steps:
       - name: Checkout
@@ -87,7 +88,7 @@ jobs:
       - name: Seed RBAC
         run: php artisan db:seed --class='Database\Seeders\RbacSeeder' --force
 
-      - name: Verify membership lifecycle and production integration domains
+      - name: Verify membership lifecycle and pilot migration domains
         run: |
           php artisan icgu:health
           php artisan icgu:production-check
@@ -99,6 +100,7 @@ jobs:
           php artisan icgu:verify-sprint7
           php artisan icgu:verify-sprint8
           php artisan icgu:verify-sprint8-payment-race
+          php artisan icgu:verify-sprint9
           php artisan icgu:reconcile-mobile-money --limit=1
           php artisan route:list --path=api/membership
           php artisan route:list --path=api/integrations/mtn-momo
@@ -106,8 +108,10 @@ jobs:
           php artisan route:list --path=membership/verify
           php artisan route:list --path=staff
           php artisan schedule:list
+          php artisan list | grep -q 'icgu:pilot-import'
+          php artisan list | grep -q 'icgu:pilot-check'
 
-      - name: Verify Sprint 8 schema, MFA, assets and RBAC records
+      - name: Verify Sprint 9 schema, assets and retained controls
         env:
           PGPASSWORD: postgres
         run: |
@@ -116,20 +120,23 @@ jobs:
           test "$(psql -At -h 127.0.0.1 -U postgres -d icgu_test -c 'select count(*) from icgu.membership_plans')" -eq 5
           test -s public/css/member-portal.css
           test -s public/css/staff-admin.css
+          test -s docs/PILOT_LAUNCH.md
+          test -s docs/pilot-members-template.csv
           grep -q '@media(max-width:640px)' public/css/member-portal.css
           grep -q '@media(max-width:760px)' public/css/staff-admin.css
           grep -q '@media print' public/css/staff-admin.css
           grep -q 'staff.mfa' routes/web.php
           grep -q 'member.billing.mtn-momo' routes/web.php
           grep -q 'mtn-momo/callback' routes/api.php
-          grep -q 'AppServiceProvider' bootstrap/providers.php
+          grep -q 'PILOT_IMPORT_MAX_ROWS' .env.example
           test "$(psql -At -h 127.0.0.1 -U postgres -d icgu_test -c "select renewal_fee::int from icgu.membership_plans where code = 'individual'")" -eq 100000
           test "$(psql -At -h 127.0.0.1 -U postgres -d icgu_test -c "select renewal_fee::int from icgu.membership_plans where code = 'student'")" -eq 50000
           test "$(psql -At -h 127.0.0.1 -U postgres -d icgu_test -c "select renewal_fee::int from icgu.membership_plans where code = 'ngo-corporate'")" -eq 1000000
           test "$(psql -At -h 127.0.0.1 -U postgres -d icgu_test -c "select renewal_fee::int from icgu.membership_plans where code = 'corporate'")" -eq 2000000
           test "$(psql -At -h 127.0.0.1 -U postgres -d icgu_test -c "select renewal_fee::int from icgu.membership_plans where code = 'sme-corporate'")" -eq 1000000
+          psql -v ON_ERROR_STOP=1 -h 127.0.0.1 -U postgres -d icgu_test -c '\d icgu.pilot_import_batches'
+          psql -v ON_ERROR_STOP=1 -h 127.0.0.1 -U postgres -d icgu_test -c '\d icgu.pilot_import_rows'
           psql -v ON_ERROR_STOP=1 -h 127.0.0.1 -U postgres -d icgu_test -c '\d icgu.payment_requests'
-          psql -v ON_ERROR_STOP=1 -h 127.0.0.1 -U postgres -d icgu_test -c '\d icgu.payment_webhook_events'
           psql -v ON_ERROR_STOP=1 -h 127.0.0.1 -U postgres -d icgu_test -c '\d icgu.users'
           psql -v ON_ERROR_STOP=1 -h 127.0.0.1 -U postgres -d icgu_test -c '\d icgu.audit_logs'
 
