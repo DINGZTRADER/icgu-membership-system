@@ -32,6 +32,7 @@ class Member extends Model
     public function emails(): HasMany { return $this->hasMany(MemberEmail::class, 'member_id')->orderByDesc('is_primary'); }
     public function primaryEmail(): HasOne { return $this->hasOne(MemberEmail::class, 'member_id')->where('is_primary', true)->where('is_active', true); }
     public function periods(): HasMany { return $this->hasMany(MembershipPeriod::class, 'member_id')->orderByDesc('target_year'); }
+    public function renewals(): HasMany { return $this->hasMany(MembershipRenewal::class, 'member_id')->orderByDesc('target_year'); }
 
     public function currentPeriod(): HasOne
     {
@@ -39,6 +40,16 @@ class Member extends Model
             ->whereDate('start_date', '<=', today())
             ->whereDate('end_date', '>=', today())
             ->latestOfMany('target_year');
+    }
+
+    public function latestPeriod(): HasOne
+    {
+        return $this->hasOne(MembershipPeriod::class, 'member_id')->latestOfMany('end_date');
+    }
+
+    public function latestRenewal(): HasOne
+    {
+        return $this->hasOne(MembershipRenewal::class, 'member_id')->latestOfMany('target_year');
     }
 
     public function ledgerEntries(): HasMany { return $this->hasMany(FinancialLedger::class, 'member_id')->orderByDesc('created_at'); }
@@ -69,8 +80,11 @@ class Member extends Model
 
     public function getOutstandingBalanceAttribute(): string
     {
-        $invoiced = $this->ledgerEntries->where('type', 'invoice')->sum('amount');
-        $settled = $this->ledgerEntries->where('type', 'invoice')->sum('amount_settled');
-        return number_format($invoiced - $settled, 4, '.', '');
+        return number_format(
+            $this->invoices()->with('settlements')->get()->sum(fn (FinancialLedger $invoice): float => (float) $invoice->balance_due),
+            4,
+            '.',
+            '',
+        );
     }
 }
