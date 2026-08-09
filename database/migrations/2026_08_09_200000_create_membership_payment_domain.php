@@ -25,6 +25,7 @@ return new class extends Migration
         DB::statement("ALTER TABLE financial_ledger ADD CONSTRAINT chk_ledger_owner CHECK (member_id IS NOT NULL OR membership_application_id IS NOT NULL)");
         DB::statement("ALTER TABLE financial_ledger ADD CONSTRAINT chk_ledger_payment_method CHECK (payment_method IS NULL OR payment_method IN ('bank_transfer','mobile_money','cash','card','cheque','other'))");
         DB::statement("ALTER TABLE financial_ledger ADD CONSTRAINT chk_ledger_invoice_number CHECK ((type = 'invoice' AND invoice_number IS NOT NULL) OR (type <> 'invoice' AND invoice_number IS NULL))");
+        DB::statement("CREATE UNIQUE INDEX uq_ledger_application_invoice ON financial_ledger (membership_application_id) WHERE type = 'invoice' AND membership_application_id IS NOT NULL");
 
         Schema::create('financial_document_sequences', function (Blueprint $table): void {
             $table->id();
@@ -60,6 +61,7 @@ return new class extends Migration
         Schema::dropIfExists('receipts');
         Schema::dropIfExists('financial_document_sequences');
 
+        DB::statement('DROP INDEX IF EXISTS uq_ledger_application_invoice');
         DB::statement('ALTER TABLE financial_ledger DROP CONSTRAINT IF EXISTS chk_ledger_invoice_number');
         DB::statement('ALTER TABLE financial_ledger DROP CONSTRAINT IF EXISTS chk_ledger_payment_method');
         DB::statement('ALTER TABLE financial_ledger DROP CONSTRAINT IF EXISTS chk_ledger_owner');
