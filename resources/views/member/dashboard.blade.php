@@ -13,13 +13,13 @@
         $activeCount = $accounts->filter(fn($a) => $a->member->status?->code === 'ACTIVE')->count();
         $balance = $accounts->sum(fn($a) => (float) $a->member->outstanding_balance);
         $nextExpiry = $accounts->map(fn($a) => $a->member->currentPeriod?->end_date)->filter()->sort()->first();
-        $credentials = $accounts->filter(fn($a) => $a->member->activeCredential !== null)->count();
+        $credentials = $accounts->filter(fn($a) => $a->member->status?->code === 'ACTIVE' && $a->member->activeCredential?->is_valid)->count();
     @endphp
     <div class="grid grid-4">
         <div class="card metric"><small>Linked memberships</small><strong>{{ $accounts->count() }}</strong></div>
         <div class="card metric"><small>Active memberships</small><strong>{{ $activeCount }}</strong></div>
         <div class="card metric"><small>Outstanding balance</small><strong>UGX {{ number_format($balance,0) }}</strong></div>
-        <div class="card metric"><small>Digital credentials</small><strong>{{ $credentials }}</strong></div>
+        <div class="card metric"><small>Current digital credentials</small><strong>{{ $credentials }}</strong></div>
     </div>
 
     <section class="section">
@@ -27,6 +27,7 @@
         <div class="grid grid-2">
             @foreach($accounts as $account)
                 @php($member = $account->member)
+                @php($credentialCurrent = $member->status?->code === 'ACTIVE' && $member->activeCredential?->is_valid)
                 <article class="card membership-card">
                     <div style="display:flex;justify-content:space-between;gap:14px;align-items:flex-start">
                         <div><span class="eyebrow">{{ $member->membershipPlan?->name ?? 'ICGU Membership' }}</span><h3 style="margin:6px 0 2px;font:700 23px Georgia,serif;color:#0b2342">{{ $member->display_name }}</h3><small style="color:#687487">{{ $member->registration_number }}</small></div>
@@ -36,7 +37,7 @@
                         <div><span>Valid until</span><strong>{{ $member->currentPeriod?->end_date?->format('d M Y') ?? $member->latestPeriod?->end_date?->format('d M Y') ?? '—' }}</strong></div>
                         <div><span>Outstanding</span><strong>UGX {{ number_format((float)$member->outstanding_balance,0) }}</strong></div>
                         <div><span>Portal role</span><strong>{{ ucfirst($account->access_role) }}</strong></div>
-                        <div><span>Credential</span><strong>{{ $member->activeCredential ? ucfirst($member->activeCredential->credential_type) : 'Not issued' }}</strong></div>
+                        <div><span>Credential</span><strong>{{ $credentialCurrent ? ucfirst($member->activeCredential->credential_type) : 'Not current' }}</strong></div>
                     </div>
                     <div class="actions">
                         <a class="btn btn-primary" href="{{ route('member.membership',$member) }}">View membership</a>
