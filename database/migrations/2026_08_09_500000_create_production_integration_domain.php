@@ -40,7 +40,7 @@ return new class extends Migration
         });
 
         DB::statement("ALTER TABLE payment_requests ADD CONSTRAINT chk_payment_requests_provider CHECK (provider IN ('mtn_momo','airtel_money'))");
-        DB::statement("ALTER TABLE payment_requests ADD CONSTRAINT chk_payment_requests_status CHECK (status IN ('created','pending','successful','failed','expired','cancelled'))");
+        DB::statement("ALTER TABLE payment_requests ADD CONSTRAINT chk_payment_requests_status CHECK (status IN ('created','pending','successful','failed','review_required','expired','cancelled'))");
         DB::statement('ALTER TABLE payment_requests ADD CONSTRAINT chk_payment_requests_amount CHECK (amount > 0)');
 
         Schema::create('payment_webhook_events', function (Blueprint $table): void {
