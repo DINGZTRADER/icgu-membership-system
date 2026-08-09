@@ -16,7 +16,9 @@ use App\Services\MembershipRenewalService;
 use App\Services\MobileMoneyPaymentService;
 use App\Services\TotpService;
 use Illuminate\Console\Command;
+use Illuminate\Http\Client\Factory as HttpFactory;
 use Illuminate\Http\Client\Request as ClientRequest;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 
@@ -240,7 +242,7 @@ final class VerifySprint8 extends Command
             }
         }
 
-        if (! class_exists(\App\Console\Commands\ProductionReadinessCheck::class)) {
+        if (! class_exists(ProductionReadinessCheck::class)) {
             throw new \RuntimeException('Production readiness command is missing.');
         }
     }
@@ -259,7 +261,11 @@ final class VerifySprint8 extends Command
             'timeout_seconds' => 5,
         ]);
 
-        Http::fake(function (ClientRequest $request) use ($financialTransactionId) {
+        Cache::forget('icgu:mtn-momo:token:'.hash('sha256', 'ci-api-user'));
+        $factory = new HttpFactory(app('events'));
+        Http::swap($factory);
+        $factory->preventStrayRequests();
+        $factory->fake(function (ClientRequest $request) use ($financialTransactionId) {
             if (str_ends_with($request->url(), '/collection/token/')) {
                 return Http::response(['access_token' => 'ci-access-token', 'token_type' => 'access_token', 'expires_in' => 3600], 200);
             }
