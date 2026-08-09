@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Console\Commands;
 
 use App\Http\Controllers\StaffPortalPageController;
+use App\Models\Member;
 use App\Models\Role;
 use App\Models\User;
 use Illuminate\Console\Command;
@@ -50,14 +51,14 @@ final class VerifySprint7 extends Command
                 throw new \RuntimeException('Sprint 7 responsive/print staff stylesheet is missing or incomplete.');
             }
 
-            $role = Role::query()->where('slug', 'super-admin')->firstOrFail();
+            $superRole = Role::query()->where('slug', 'super-admin')->firstOrFail();
             $user = User::query()->create([
                 'name' => 'Sprint Seven Secretariat User',
                 'email' => 'sprint7.staff@prototype.invalid',
                 'password' => 'prototype-password',
                 'is_active' => true,
             ]);
-            $user->roles()->attach($role->id);
+            $user->roles()->attach($superRole->id);
             Auth::login($user);
             View::share('errors', new ViewErrorBag());
 
@@ -92,7 +93,32 @@ final class VerifySprint7 extends Command
                 }
             }
 
-            $this->info('Sprint 7 Secretariat dashboard, staff workspaces, reports and audit UI verified successfully.');
+            Auth::logout();
+            $trainingRole = Role::query()->where('slug', 'training-officer')->firstOrFail();
+            $limitedUser = User::query()->create([
+                'name' => 'Sprint Seven Limited User',
+                'email' => 'sprint7.training@prototype.invalid',
+                'password' => 'prototype-password',
+                'is_active' => true,
+            ]);
+            $limitedUser->roles()->attach($trainingRole->id);
+            Auth::login($limitedUser);
+
+            $limitedRequest = Request::create('/staff/dashboard', 'GET');
+            $limitedRequest->setUserResolver(fn () => $limitedUser);
+            $limitedDashboard = $controller->dashboard($limitedRequest)->render();
+            if (str_contains($limitedDashboard, 'Outstanding balance') || str_contains($limitedDashboard, 'Applications requiring attention')) {
+                throw new \RuntimeException('Restricted dashboard exposed finance or application-detail information to Training Officer.');
+            }
+
+            $memberHtml = $controller->member(Member::query()->firstOrFail())->render();
+            foreach (['Financial ledger', 'Portal access', 'Renewal history'] as $forbidden) {
+                if (str_contains($memberHtml, $forbidden)) {
+                    throw new \RuntimeException("Restricted member view exposed unauthorised domain: {$forbidden}");
+                }
+            }
+
+            $this->info('Sprint 7 Secretariat dashboard, staff workspaces, RBAC redaction, reports and audit UI verified successfully.');
             return self::SUCCESS;
         } finally {
             Auth::logout();
