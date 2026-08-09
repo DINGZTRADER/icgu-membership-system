@@ -158,12 +158,7 @@ final class MobileMoneyPaymentService
             $providerAmount = isset($provider['amount']) ? (float) $provider['amount'] : null;
             $providerCurrency = isset($provider['currency']) ? strtoupper((string) $provider['currency']) : null;
             if ($providerAmount === null || abs($providerAmount - (float) $locked->amount) > 0.0001 || $providerCurrency !== strtoupper($locked->currency)) {
-                $locked->forceFill([
-                    'status' => 'failed',
-                    'failure_reason' => 'Provider amount or currency did not match the original payment request.',
-                    'completed_at' => now(),
-                ])->save();
-                throw new RuntimeException('MTN MoMo settlement mismatch detected.');
+                return $this->markReviewRequired($locked, 'MTN reported SUCCESSFUL but the provider amount or currency did not match the original payment request.');
             }
 
             $transactionReference = $locked->provider_transaction_id ?: 'MTN-'.$locked->external_reference;
@@ -171,33 +166,46 @@ final class MobileMoneyPaymentService
 
             if ($existingLedger === null) {
                 $invoice = FinancialLedger::query()->whereKey($locked->invoice_id)->with('settlements')->lockForUpdate()->firstOrFail();
+                $currentBalance = (float) $invoice->balance_due;
+                if ((float) $locked->amount - $currentBalance > 0.0001) {
+                    return $this->markReviewRequired(
+                        $locked,
+                        'MTN reported SUCCESSFUL after the invoice balance changed. The provider charge requires manual Finance reconciliation before it can be posted to the ledger.',
+                    );
+                }
+
                 $actor = $this->systemActors->integrations();
 
-                if ($locked->membership_application_id !== null) {
-                    $application = $locked->application()->firstOrFail();
-                    $this->applicationPayments->recordPayment(
-                        $application,
-                        $invoice,
-                        (string) $locked->amount,
-                        'mobile_money',
-                        $transactionReference,
-                        $actor,
-                        'MTN MoMo',
-                        now(),
-                    );
-                } elseif ($locked->membership_renewal_id !== null) {
-                    $renewal = $locked->renewal()->firstOrFail();
-                    $this->renewalPayments->recordPayment(
-                        $renewal,
-                        (string) $locked->amount,
-                        'mobile_money',
-                        $transactionReference,
-                        $actor,
-                        'MTN MoMo',
-                        now(),
-                    );
-                } else {
-                    throw new RuntimeException('Payment request is not linked to a supported membership billing context.');
+                try {
+                    if ($locked->membership_application_id !== null) {
+                        $application = $locked->application()->firstOrFail();
+                        $this->applicationPayments->recordPayment(
+                            $application,
+                            $invoice,
+                            (string) $locked->amount,
+                            'mobile_money',
+                            $transactionReference,
+                            $actor,
+                            'MTN MoMo',
+                            now(),
+                        );
+                    } elseif ($locked->membership_renewal_id !== null) {
+                        $renewal = $locked->renewal()->firstOrFail();
+                        $this->renewalPayments->recordPayment(
+                            $renewal,
+                            (string) $locked->amount,
+                            'mobile_money',
+                            $transactionReference,
+                            $actor,
+                            'MTN MoMo',
+                            now(),
+                        );
+                    } else {
+                        return $this->markReviewRequired($locked, 'MTN reported SUCCESSFUL but the payment request is not linked to a supported membership billing context.');
+                    }
+                } catch (ValidationException $exception) {
+                    $messages = collect($exception->errors())->flatten()->filter()->implode(' ');
+                    return $this->markReviewRequired($locked, 'MTN reported SUCCESSFUL but automatic ledger posting was blocked by the membership domain: '.$messages);
                 }
             }
 
@@ -220,10 +228,10 @@ final class MobileMoneyPaymentService
         });
     }
 
-    /** @return array{processed:int, successful:int, failed:int, pending:int} */
+    /** @return array{processed:int, successful:int, failed:int, review_required:int, pending:int} */
     public function reconcilePending(int $limit = 50): array
     {
-        $processed = $successful = $failed = $pending = 0;
+        $processed = $successful = $failed = $reviewRequired = $pending = 0;
 
         PaymentRequest::query()
             ->where('provider', 'mtn_momo')
@@ -231,13 +239,14 @@ final class MobileMoneyPaymentService
             ->orderBy('id')
             ->limit(max(1, min($limit, 500)))
             ->get()
-            ->each(function (PaymentRequest $request) use (&$processed, &$successful, &$failed, &$pending): void {
+            ->each(function (PaymentRequest $request) use (&$processed, &$successful, &$failed, &$reviewRequired, &$pending): void {
                 $processed++;
                 try {
                     $result = $this->reconcile($request);
                     match ($result->status) {
                         'successful' => $successful++,
                         'failed' => $failed++,
+                        'review_required' => $reviewRequired++,
                         default => $pending++,
                     };
                 } catch (\Throwable) {
@@ -245,7 +254,34 @@ final class MobileMoneyPaymentService
                 }
             });
 
-        return compact('processed', 'successful', 'failed', 'pending');
+        return [
+            'processed' => $processed,
+            'successful' => $successful,
+            'failed' => $failed,
+            'review_required' => $reviewRequired,
+            'pending' => $pending,
+        ];
+    }
+
+    private function markReviewRequired(PaymentRequest $request, string $reason): PaymentRequest
+    {
+        $request->forceFill([
+            'status' => 'review_required',
+            'failure_reason' => Str::limit($reason, 500, ''),
+            'completed_at' => now(),
+        ])->save();
+
+        $this->audit->record('mobile_money_manual_reconciliation_required', $request, after: [
+            'provider' => $request->provider,
+            'external_reference' => $request->external_reference,
+            'provider_transaction_id' => $request->provider_transaction_id,
+            'invoice_id' => $request->invoice_id,
+            'amount' => $request->amount,
+            'currency' => $request->currency,
+            'reason' => $request->failure_reason,
+        ]);
+
+        return $request;
     }
 
     private function normalizeUgandaMsisdn(string $value): string
