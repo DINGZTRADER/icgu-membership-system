@@ -57,7 +57,7 @@ final class VerifySprint5 extends Command
                 'is_active' => true,
             ]);
             $start = today()->subMonth();
-            $end = $start->addYear()->subDay();
+            $end = $start->copy()->addYear()->subDay();
             $member->periods()->create([
                 'start_date' => $start->toDateString(),
                 'end_date' => $end->toDateString(),
