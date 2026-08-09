@@ -45,12 +45,32 @@ class FinancialLedger extends Model
 
     public function scopeOverdue(Builder $query): Builder
     {
-        return $query->where('type', 'invoice')->where('due_date', '<', now());
+        return $this->scopeOutstanding($query)
+            ->where('financial_ledger.due_date', '<', now());
     }
 
     public function scopeDueWithin(Builder $query, int $days): Builder
     {
-        return $query->where('type', 'invoice')->whereBetween('due_date', [now(), now()->addDays($days)]);
+        return $this->scopeOutstanding($query)
+            ->whereBetween('financial_ledger.due_date', [now(), now()->addDays($days)]);
+    }
+
+    public function scopeOutstanding(Builder $query): Builder
+    {
+        return $query
+            ->where('financial_ledger.type', 'invoice')
+            ->whereRaw(<<<'SQL'
+financial_ledger.amount > COALESCE(
+    (
+        SELECT SUM(CASE WHEN settlement.type = 'refund' THEN -settlement.amount ELSE settlement.amount END)
+        FROM financial_ledger AS settlement
+        WHERE settlement.parent_invoice_id = financial_ledger.id
+          AND settlement.type IN ('payment', 'waiver', 'refund')
+    ),
+    financial_ledger.amount_settled,
+    0
+)
+SQL);
     }
 
     public function scopeForYear(Builder $query, int $year): Builder { return $query->whereYear('created_at', $year); }
@@ -63,9 +83,13 @@ class FinancialLedger extends Model
         }
 
         $entries = $this->relationLoaded('settlements') ? $this->settlements : $this->settlements()->get();
-        $settled = 0.0;
-        foreach ($entries as $entry) {
-            $settled += $entry->type === 'refund' ? -(float) $entry->amount : (float) $entry->amount;
+        $settled = (float) $this->amount_settled;
+
+        if ($entries->isNotEmpty()) {
+            $settled = 0.0;
+            foreach ($entries as $entry) {
+                $settled += $entry->type === 'refund' ? -(float) $entry->amount : (float) $entry->amount;
+            }
         }
 
         return number_format(max(0, (float) $this->amount - $settled), 4, '.', '');
