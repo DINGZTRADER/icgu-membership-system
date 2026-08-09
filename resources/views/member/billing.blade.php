@@ -2,6 +2,7 @@
 @section('title','Billing & Renewals')
 @section('page-title','Billing & Renewals')
 @section('content')
+@php($outstandingInvoices = $member->invoices->filter(fn($invoice) => !$invoice->is_fully_settled))
 <div class="hero">
     <div><span class="eyebrow">{{ $member->registration_number }}</span><h2>Billing & annual renewal</h2><p>Review invoices, payments, receipts and annual membership renewals for {{ $member->display_name }}.</p></div>
     <div><span class="status {{ (float)$member->outstanding_balance > 0 ? 'warn' : 'ok' }}">UGX {{ number_format((float)$member->outstanding_balance,0) }} outstanding</span></div>
@@ -29,6 +30,19 @@
         </tbody></table></div>
     @endif
 </section>
+
+@if(config('services.mtn_momo.enabled') && $outstandingInvoices->isNotEmpty())
+<section class="section card">
+    <div class="section-head"><div><h3>Pay with MTN MoMo</h3><p style="margin:4px 0 0;color:#687487">Choose an outstanding invoice and enter the MTN number that should receive the approval prompt. Payment is credited only after MTN verifies it.</p></div><span class="status info">Verified provider settlement</span></div>
+    <form method="POST" action="{{ route('member.billing.mtn-momo',$member) }}">@csrf
+        <div class="grid grid-2">
+            <div class="field"><label for="invoice_id">Outstanding invoice</label><select id="invoice_id" name="invoice_id" required>@foreach($outstandingInvoices as $invoice)<option value="{{ $invoice->id }}">{{ $invoice->invoice_number }} — UGX {{ number_format((float)$invoice->balance_due,0) }}</option>@endforeach</select></div>
+            <div class="field"><label for="msisdn">MTN mobile number</label><input id="msisdn" name="msisdn" inputmode="tel" autocomplete="tel" placeholder="0772 123 456" required></div>
+        </div>
+        <div class="actions"><button class="btn btn-primary" type="submit">Send MTN MoMo request</button></div>
+    </form>
+</section>
+@endif
 
 <section class="section">
     <div class="section-head"><h3>Invoices</h3></div>

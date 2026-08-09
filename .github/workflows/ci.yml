@@ -1,4 +1,4 @@
-name: Sprint 7 Verification
+name: Sprint 8 Verification
 
 on:
   pull_request:
@@ -11,7 +11,7 @@ permissions:
 jobs:
   verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 12
 
     services:
       postgres:
@@ -42,6 +42,8 @@ jobs:
       QUEUE_CONNECTION: sync
       LOG_CHANNEL: stderr
       MEMBERSHIP_DOCUMENT_DISK: local
+      MTN_MOMO_ENABLED: false
+      PRODUCTION_REQUIRE_LIVE_MAIL: false
 
     steps:
       - name: Checkout
@@ -59,6 +61,9 @@ jobs:
 
       - name: Install locked dependencies
         run: composer install --no-interaction --prefer-dist --no-progress
+
+      - name: Generate ephemeral test encryption key
+        run: php artisan key:generate --force
 
       - name: Validate Composer manifest and lockfile
         run: composer validate --no-check-publish
@@ -82,7 +87,7 @@ jobs:
       - name: Seed RBAC
         run: php artisan db:seed --class='Database\Seeders\RbacSeeder' --force
 
-      - name: Verify membership lifecycle and portal domains
+      - name: Verify membership lifecycle and production integration domains
         run: |
           php artisan icgu:health
           php artisan icgu:verify-sprint2
@@ -91,13 +96,16 @@ jobs:
           php artisan icgu:verify-sprint5
           php artisan icgu:verify-sprint6
           php artisan icgu:verify-sprint7
+          php artisan icgu:verify-sprint8
+          php artisan icgu:reconcile-mobile-money --limit=1
           php artisan route:list --path=api/membership
+          php artisan route:list --path=api/integrations/mtn-momo
           php artisan route:list --path=member
           php artisan route:list --path=membership/verify
           php artisan route:list --path=staff
           php artisan schedule:list
 
-      - name: Verify Sprint 7 assets, RBAC and domain records
+      - name: Verify Sprint 8 schema, MFA, assets and RBAC records
         env:
           PGPASSWORD: postgres
         run: |
@@ -109,17 +117,18 @@ jobs:
           grep -q '@media(max-width:640px)' public/css/member-portal.css
           grep -q '@media(max-width:760px)' public/css/staff-admin.css
           grep -q '@media print' public/css/staff-admin.css
-          grep -q 'staff.dashboard' routes/web.php
-          grep -q 'staff.applications.index' routes/web.php
-          grep -q 'staff.finance' routes/web.php
-          grep -q 'staff.audit' routes/web.php
+          grep -q 'staff.mfa' routes/web.php
+          grep -q 'member.billing.mtn-momo' routes/web.php
+          grep -q 'mtn-momo/callback' routes/api.php
+          grep -q 'AppServiceProvider' bootstrap/providers.php
           test "$(psql -At -h 127.0.0.1 -U postgres -d icgu_test -c "select renewal_fee::int from icgu.membership_plans where code = 'individual'")" -eq 100000
           test "$(psql -At -h 127.0.0.1 -U postgres -d icgu_test -c "select renewal_fee::int from icgu.membership_plans where code = 'student'")" -eq 50000
           test "$(psql -At -h 127.0.0.1 -U postgres -d icgu_test -c "select renewal_fee::int from icgu.membership_plans where code = 'ngo-corporate'")" -eq 1000000
           test "$(psql -At -h 127.0.0.1 -U postgres -d icgu_test -c "select renewal_fee::int from icgu.membership_plans where code = 'corporate'")" -eq 2000000
           test "$(psql -At -h 127.0.0.1 -U postgres -d icgu_test -c "select renewal_fee::int from icgu.membership_plans where code = 'sme-corporate'")" -eq 1000000
-          psql -v ON_ERROR_STOP=1 -h 127.0.0.1 -U postgres -d icgu_test -c '\d icgu.member_portal_accounts'
-          psql -v ON_ERROR_STOP=1 -h 127.0.0.1 -U postgres -d icgu_test -c '\d icgu.member_credentials'
+          psql -v ON_ERROR_STOP=1 -h 127.0.0.1 -U postgres -d icgu_test -c '\d icgu.payment_requests'
+          psql -v ON_ERROR_STOP=1 -h 127.0.0.1 -U postgres -d icgu_test -c '\d icgu.payment_webhook_events'
+          psql -v ON_ERROR_STOP=1 -h 127.0.0.1 -U postgres -d icgu_test -c '\d icgu.users'
           psql -v ON_ERROR_STOP=1 -h 127.0.0.1 -U postgres -d icgu_test -c '\d icgu.audit_logs'
 
       - name: Verify audit log immutability

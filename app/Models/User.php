@@ -16,7 +16,7 @@ final class User extends Authenticatable
 
     protected $fillable = ['name', 'email', 'password', 'is_active', 'last_login_at'];
 
-    protected $hidden = ['password', 'remember_token'];
+    protected $hidden = ['password', 'remember_token', 'mfa_secret', 'mfa_recovery_codes'];
 
     protected function casts(): array
     {
@@ -25,6 +25,9 @@ final class User extends Authenticatable
             'last_login_at' => 'datetime',
             'is_active' => 'boolean',
             'password' => 'hashed',
+            'mfa_secret' => 'encrypted',
+            'mfa_recovery_codes' => 'encrypted:array',
+            'mfa_confirmed_at' => 'immutable_datetime',
         ];
     }
 
@@ -55,5 +58,15 @@ final class User extends Authenticatable
         return $this->roles()
             ->whereHas('permissions', fn ($query) => $query->where('slug', $permission))
             ->exists();
+    }
+
+    public function hasStaffRole(): bool
+    {
+        return $this->roles()->where('slug', '<>', 'member')->exists();
+    }
+
+    public function requiresStaffMfa(): bool
+    {
+        return $this->hasStaffRole();
     }
 }

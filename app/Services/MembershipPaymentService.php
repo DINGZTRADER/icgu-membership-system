@@ -71,7 +71,7 @@ final class MembershipPaymentService
         string $amount,
         string $method,
         string $transactionReference,
-        User $actor,
+        ?User $actor = null,
         ?string $provider = null,
         ?\DateTimeInterface $receivedAt = null,
     ): array {
@@ -115,7 +115,7 @@ final class MembershipPaymentService
                 'received_at' => $timestamp,
                 'settled_at' => $timestamp,
                 'notes' => 'Membership subscription payment.',
-                'created_by' => $actor->id,
+                'created_by' => $actor?->id,
             ]);
 
             $receipt = new Receipt();
@@ -128,7 +128,7 @@ final class MembershipPaymentService
                 'currency' => $payment->currency,
                 'payment_reference' => $transactionReference,
                 'issued_at' => now(),
-                'issued_by' => $actor->id,
+                'issued_by' => $actor?->id,
                 'meta' => ['payment_method' => $method, 'payment_provider' => $provider],
             ])->save();
 
