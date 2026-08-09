@@ -28,27 +28,24 @@ final class FinancialDocumentNumberService
         $year ??= (int) now()->format('Y');
 
         return DB::transaction(function () use ($type, $format, $year): string {
+            DB::table('financial_document_sequences')->insertOrIgnore([
+                'document_type' => $type,
+                'year' => $year,
+                'last_sequence' => 0,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+
             $sequence = DB::table('financial_document_sequences')
                 ->where('document_type', $type)
                 ->where('year', $year)
                 ->lockForUpdate()
-                ->first();
+                ->firstOrFail();
 
-            if ($sequence === null) {
-                DB::table('financial_document_sequences')->insert([
-                    'document_type' => $type,
-                    'year' => $year,
-                    'last_sequence' => 1,
-                    'created_at' => now(),
-                    'updated_at' => now(),
-                ]);
-                $next = 1;
-            } else {
-                $next = (int) $sequence->last_sequence + 1;
-                DB::table('financial_document_sequences')
-                    ->where('id', $sequence->id)
-                    ->update(['last_sequence' => $next, 'updated_at' => now()]);
-            }
+            $next = (int) $sequence->last_sequence + 1;
+            DB::table('financial_document_sequences')
+                ->where('id', $sequence->id)
+                ->update(['last_sequence' => $next, 'updated_at' => now()]);
 
             return sprintf($format, $next, $year);
         });
