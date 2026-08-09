@@ -1,4 +1,4 @@
-name: Sprint 3 Verification
+name: Sprint 4 Verification
 
 on:
   pull_request:
@@ -76,27 +76,34 @@ jobs:
       - name: Seed RBAC
         run: php artisan db:seed --class='Database\Seeders\RbacSeeder' --force
 
-      - name: Verify application payments and admission domains
+      - name: Verify membership lifecycle domains
         run: |
           php artisan icgu:health
           php artisan icgu:verify-sprint2
           php artisan icgu:verify-sprint3
+          php artisan icgu:verify-sprint4
           php artisan route:list --path=api/membership
           php artisan route:list --path=staff/membership
+          php artisan schedule:list
 
-      - name: Verify Sprint 3 schema and RBAC records
+      - name: Verify Sprint 4 schema, fees and RBAC records
         env:
           PGPASSWORD: postgres
         run: |
           test "$(psql -At -h 127.0.0.1 -U postgres -d icgu_test -c 'select count(*) from icgu.roles')" -eq 7
-          test "$(psql -At -h 127.0.0.1 -U postgres -d icgu_test -c 'select count(*) from icgu.permissions')" -eq 17
+          test "$(psql -At -h 127.0.0.1 -U postgres -d icgu_test -c 'select count(*) from icgu.permissions')" -eq 19
           test "$(psql -At -h 127.0.0.1 -U postgres -d icgu_test -c 'select count(*) from icgu.membership_plans')" -eq 5
           test "$(psql -At -h 127.0.0.1 -U postgres -d icgu_test -c "select first_year_fee::int from icgu.membership_plans where code = 'individual'")" -eq 150000
-          test "$(psql -At -h 127.0.0.1 -U postgres -d icgu_test -c "select first_year_fee::int from icgu.membership_plans where code = 'corporate'")" -eq 2000000
+          test "$(psql -At -h 127.0.0.1 -U postgres -d icgu_test -c "select renewal_fee::int from icgu.membership_plans where code = 'individual'")" -eq 100000
+          test "$(psql -At -h 127.0.0.1 -U postgres -d icgu_test -c "select renewal_fee::int from icgu.membership_plans where code = 'student'")" -eq 50000
+          test "$(psql -At -h 127.0.0.1 -U postgres -d icgu_test -c "select renewal_fee::int from icgu.membership_plans where code = 'ngo-corporate'")" -eq 1000000
+          test "$(psql -At -h 127.0.0.1 -U postgres -d icgu_test -c "select renewal_fee::int from icgu.membership_plans where code = 'corporate'")" -eq 2000000
+          test "$(psql -At -h 127.0.0.1 -U postgres -d icgu_test -c "select renewal_fee::int from icgu.membership_plans where code = 'sme-corporate'")" -eq 1000000
+          psql -v ON_ERROR_STOP=1 -h 127.0.0.1 -U postgres -d icgu_test -c '\d icgu.membership_renewals'
           psql -v ON_ERROR_STOP=1 -h 127.0.0.1 -U postgres -d icgu_test -c '\d icgu.financial_ledger'
-          psql -v ON_ERROR_STOP=1 -h 127.0.0.1 -U postgres -d icgu_test -c '\d icgu.receipts'
-          psql -v ON_ERROR_STOP=1 -h 127.0.0.1 -U postgres -d icgu_test -c '\d icgu.financial_document_sequences'
+          psql -v ON_ERROR_STOP=1 -h 127.0.0.1 -U postgres -d icgu_test -c '\d icgu.communication_logs'
           test "$(psql -At -h 127.0.0.1 -U postgres -d icgu_test -c "select count(*) from pg_indexes where schemaname='icgu' and indexname='uq_ledger_application_invoice'")" -eq 1
+          test "$(psql -At -h 127.0.0.1 -U postgres -d icgu_test -c "select count(*) from pg_indexes where schemaname='icgu' and indexname='uq_ledger_renewal_invoice'")" -eq 1
 
       - name: Verify audit log immutability
         env:

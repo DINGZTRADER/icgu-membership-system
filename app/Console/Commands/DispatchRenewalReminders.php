@@ -4,74 +4,52 @@ declare(strict_types=1);
 
 namespace App\Console\Commands;
 
-use App\Models\FinancialLedger;
 use App\Models\CommunicationLog;
-use App\Models\LookupStatus;
+use App\Models\FinancialLedger;
 use Illuminate\Console\Command;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
 
-/**
- * DispatchRenewalReminders
- *
- * Lightweight synchronous reminder command for the ICGU prototype phase.
- * Avoids heavy queue workers. Runs via `php artisan icgu:dispatch-reminders`
- * or on a schedule (kernel schedule or Laravel Cloud cron).
- *
- * Sequence logic:
- *   First Notice  → overdue by 0–14 days  AND no prior notice exists
- *   Second Notice → overdue by 15–30 days AND only 'first' notice exists
- *   Final Notice  → overdue by 31+ days   AND 'second' notice exists but no 'final'
- *
- * Uses SYNC mail driver in prototype mode — no queue workers required.
- * Logs every dispatch attempt in communication_logs for full traceability.
- */
-class DispatchRenewalReminders extends Command
+final class DispatchRenewalReminders extends Command
 {
-    protected $signature   = 'icgu:dispatch-reminders
-                                {--dry-run : Simulate dispatch without sending or writing logs}
-                                {--limit=50 : Maximum number of reminders to process per run}';
+    protected $signature = 'icgu:dispatch-reminders
+        {--dry-run : Simulate dispatch without sending or writing logs}
+        {--limit=50 : Maximum number of renewal invoices to inspect per run}';
 
-    protected $description = 'Dispatch sequential renewal reminder emails to members with outstanding invoices.';
+    protected $description = 'Dispatch staged annual-renewal reminders for outstanding renewal invoices.';
 
     private int $dispatched = 0;
-    private int $skipped    = 0;
-    private int $failed     = 0;
+    private int $skipped = 0;
+    private int $failed = 0;
 
     public function handle(): int
     {
         $isDryRun = (bool) $this->option('dry-run');
-        $limit    = (int)  $this->option('limit');
+        $limit = max(1, min((int) $this->option('limit'), 500));
 
-        $this->info('ICGU Renewal Reminder Dispatcher');
-        $this->info('Mode: ' . ($isDryRun ? 'DRY RUN (no emails sent)' : 'LIVE'));
-        $this->newLine();
-
-        // Fetch overdue invoices with member and email data (single optimized query)
-        $overdueInvoices = FinancialLedger::query()
-            ->with([
-                'member.primaryEmail',
-                'member.communicationLogs' => fn ($q) => $q->whereIn('sequence', ['first', 'second', 'final'])
-                                                            ->orderByDesc('sent_at'),
-            ])
+        $invoices = FinancialLedger::query()
+            ->with(['member.primaryEmail', 'member.status', 'member.communicationLogs', 'settlements', 'renewal'])
             ->where('type', 'invoice')
-            ->whereNull('settled_at')
-            ->whereColumn('amount_settled', '<', 'amount')
-            ->where('due_date', '<', now())
+            ->whereNotNull('membership_renewal_id')
+            ->whereNotNull('due_date')
+            ->where('due_date', '<=', now()->addDays(30))
             ->orderBy('due_date')
             ->limit($limit)
-            ->get();
+            ->get()
+            ->filter(fn (FinancialLedger $invoice): bool => (float) $invoice->balance_due > 0.0001)
+            ->values();
 
-        if ($overdueInvoices->isEmpty()) {
-            $this->info('No overdue invoices found. Nothing to dispatch.');
+        if ($invoices->isEmpty()) {
+            $this->info('No outstanding renewal reminders are due.');
             return self::SUCCESS;
         }
 
-        $this->line("Found {$overdueInvoices->count()} overdue invoice(s).");
+        $this->info('ICGU Renewal Reminder Dispatcher');
+        $this->line('Mode: '.($isDryRun ? 'DRY RUN' : 'LIVE'));
+        $this->line("Outstanding renewal invoices inspected: {$invoices->count()}");
         $this->newLine();
 
-        foreach ($overdueInvoices as $invoice) {
+        foreach ($invoices as $invoice) {
             $this->processInvoice($invoice, $isDryRun);
         }
 
@@ -79,10 +57,10 @@ class DispatchRenewalReminders extends Command
         $this->table(
             ['Status', 'Count'],
             [
-                ['✓ Dispatched', $this->dispatched],
-                ['⚠ Skipped (already sent)', $this->skipped],
-                ['✗ Failed', $this->failed],
-            ]
+                ['Dispatched', $this->dispatched],
+                ['Skipped', $this->skipped],
+                ['Failed', $this->failed],
+            ],
         );
 
         return self::SUCCESS;
@@ -91,37 +69,31 @@ class DispatchRenewalReminders extends Command
     private function processInvoice(FinancialLedger $invoice, bool $isDryRun): void
     {
         $member = $invoice->member;
+        if ($member === null || $member->primaryEmail === null || $invoice->renewal === null) {
+            $this->warn("SKIP invoice {$invoice->invoice_number}: member, email or renewal record missing.");
+            $this->skipped++;
+            return;
+        }
 
-        if ($member === null || $member->primaryEmail === null) {
-            $this->warn("  SKIP: Invoice #{$invoice->id} — member or email not found.");
+        $campaignRef = "renewal_{$invoice->membership_renewal_id}";
+        $existingSequences = $member->communicationLogs
+            ->where('campaign_ref', $campaignRef)
+            ->where('status', 'sent')
+            ->pluck('sequence')
+            ->all();
+
+        $nextSequence = $this->resolveNextSequence($invoice, $existingSequences);
+        if ($nextSequence === null) {
             $this->skipped++;
             return;
         }
 
         $recipientEmail = $member->primaryEmail->email;
-        $memberName     = $member->display_name;
-        $daysPastDue    = (int) now()->diffInDays($invoice->due_date);
+        $memberName = $member->display_name;
+        $balanceDue = number_format((float) $invoice->balance_due, 0, '.', ',');
+        $subject = $this->buildSubject($nextSequence, $member->registration_number);
 
-        // Determine which sequence this member should receive next
-        $existingSequences = $member->communicationLogs
-            ->where('campaign_ref', "renewal_{$invoice->id}")
-            ->pluck('sequence')
-            ->toArray();
-
-        $nextSequence = $this->resolveNextSequence($daysPastDue, $existingSequences);
-
-        if ($nextSequence === null) {
-            $this->line("  SKIP: {$memberName} ({$recipientEmail}) — all notices already sent or not yet due.");
-            $this->skipped++;
-            return;
-        }
-
-        $subject       = $this->buildSubject($nextSequence, $member->registration_number);
-        $trackingToken = Str::uuid()->toString();
-        $campaignRef   = "renewal_{$invoice->id}";
-        $balanceDue    = number_format((float) $invoice->balance_due, 2, '.', ',');
-
-        $this->line("  → [{$nextSequence}] {$memberName} | {$recipientEmail} | Balance: UGX {$balanceDue}");
+        $this->line("→ {$nextSequence}: {$memberName} | {$recipientEmail} | UGX {$balanceDue}");
 
         if ($isDryRun) {
             $this->skipped++;
@@ -129,83 +101,88 @@ class DispatchRenewalReminders extends Command
         }
 
         try {
-            // Send synchronous email (SYNC driver = no queue worker needed)
             Mail::raw(
-                $this->buildEmailBody($memberName, $nextSequence, $balanceDue, $invoice->due_date?->toDateString()),
-                function ($message) use ($recipientEmail, $subject) {
-                    $message->to($recipientEmail)->subject($subject);
-                }
+                $this->buildEmailBody(
+                    $memberName,
+                    $nextSequence,
+                    $balanceDue,
+                    $invoice->due_date?->toDateString(),
+                    $invoice->renewal->target_year,
+                    $member->status?->code,
+                ),
+                fn ($message) => $message->to($recipientEmail)->subject($subject),
             );
 
-            // Log successful dispatch
-            CommunicationLog::create([
-                'member_id'       => $member->id,
-                'campaign_ref'    => $campaignRef,
-                'sequence'        => $nextSequence,
-                'channel'         => 'email',
-                'subject'         => $subject,
-                'status'          => 'sent',
+            CommunicationLog::query()->create([
+                'member_id' => $member->id,
+                'campaign_ref' => $campaignRef,
+                'sequence' => $nextSequence,
+                'channel' => 'email',
+                'subject' => $subject,
+                'status' => 'sent',
                 'recipient_email' => $recipientEmail,
-                'sent_at'         => now(),
-                'tracking_token'  => $trackingToken,
-                'meta'            => [
-                    'invoice_id'     => $invoice->id,
-                    'balance_due'    => $invoice->balance_due,
-                    'days_past_due'  => $daysPastDue,
-                    'driver'         => config('mail.default'),
+                'sent_at' => now(),
+                'tracking_token' => (string) Str::uuid(),
+                'meta' => [
+                    'invoice_id' => $invoice->id,
+                    'invoice_number' => $invoice->invoice_number,
+                    'membership_renewal_id' => $invoice->membership_renewal_id,
+                    'balance_due' => $invoice->balance_due,
+                    'due_date' => $invoice->due_date?->toDateString(),
+                    'driver' => config('mail.default'),
                 ],
             ]);
 
-            $this->info("    ✓ Sent ({$nextSequence} notice)");
             $this->dispatched++;
-
         } catch (\Throwable $e) {
-            // Log failed attempt — never suppress, always record
-            CommunicationLog::create([
-                'member_id'       => $member->id,
-                'campaign_ref'    => $campaignRef,
-                'sequence'        => $nextSequence,
-                'channel'         => 'email',
-                'subject'         => $subject,
-                'status'          => 'failed',
+            CommunicationLog::query()->create([
+                'member_id' => $member->id,
+                'campaign_ref' => $campaignRef,
+                'sequence' => $nextSequence,
+                'channel' => 'email',
+                'subject' => $subject,
+                'status' => 'failed',
                 'recipient_email' => $recipientEmail,
-                'sent_at'         => now(),
-                'tracking_token'  => $trackingToken,
-                'meta'            => [
-                    'invoice_id'    => $invoice->id,
+                'sent_at' => now(),
+                'tracking_token' => (string) Str::uuid(),
+                'meta' => [
+                    'invoice_id' => $invoice->id,
+                    'membership_renewal_id' => $invoice->membership_renewal_id,
                     'error_message' => $e->getMessage(),
-                    'error_class'   => get_class($e),
+                    'error_class' => $e::class,
                 ],
             ]);
 
-            $this->error("    ✗ Failed: " . $e->getMessage());
+            $this->error("Failed for {$recipientEmail}: {$e->getMessage()}");
             $this->failed++;
         }
     }
 
-    /**
-     * Resolve the next notice sequence based on days overdue and existing notices.
-     */
-    private function resolveNextSequence(int $daysPastDue, array $existingSequences): ?string
+    private function resolveNextSequence(FinancialLedger $invoice, array $existingSequences): ?string
     {
-        $hasFinal  = in_array('final',  $existingSequences, true);
+        $dueDate = $invoice->due_date?->startOfDay();
+        if ($dueDate === null) {
+            return null;
+        }
+
+        if ($dueDate->isFuture()) {
+            $daysUntilDue = (int) today()->diffInDays($dueDate, false);
+            return $daysUntilDue <= 30 && ! in_array('upcoming', $existingSequences, true) ? 'upcoming' : null;
+        }
+
+        $daysPastDue = (int) $dueDate->diffInDays(today());
+        $hasFirst = in_array('first', $existingSequences, true);
         $hasSecond = in_array('second', $existingSequences, true);
-        $hasFirst  = in_array('first',  $existingSequences, true);
+        $hasFinal = in_array('final', $existingSequences, true);
 
-        if ($hasFinal) {
-            return null; // All notices sent; escalate manually
+        if (! $hasFirst) {
+            return 'first';
         }
-
-        if ($daysPastDue >= 31 && $hasSecond) {
-            return 'final';
-        }
-
-        if ($daysPastDue >= 15 && $hasFirst && !$hasSecond) {
+        if ($daysPastDue >= 15 && ! $hasSecond) {
             return 'second';
         }
-
-        if ($daysPastDue >= 0 && !$hasFirst) {
-            return 'first';
+        if ($daysPastDue >= 31 && $hasSecond && ! $hasFinal) {
+            return 'final';
         }
 
         return null;
@@ -214,45 +191,53 @@ class DispatchRenewalReminders extends Command
     private function buildSubject(string $sequence, string $registrationNumber): string
     {
         return match ($sequence) {
-            'first'  => "[ICGU] Renewal Due — Annual Membership Fee | {$registrationNumber}",
-            'second' => "[ICGU] Second Notice — Outstanding Membership Dues | {$registrationNumber}",
-            'final'  => "[ICGU] FINAL NOTICE — Immediate Payment Required | {$registrationNumber}",
-            default  => "[ICGU] Membership Renewal Reminder | {$registrationNumber}",
+            'upcoming' => "[ICGU] Membership Renewal Approaching | {$registrationNumber}",
+            'first' => "[ICGU] Membership Renewal Due | {$registrationNumber}",
+            'second' => "[ICGU] Second Renewal Notice | {$registrationNumber}",
+            'final' => "[ICGU] Final Renewal Notice | {$registrationNumber}",
+            default => "[ICGU] Membership Renewal | {$registrationNumber}",
         };
     }
 
     private function buildEmailBody(
-        string  $memberName,
-        string  $sequence,
-        string  $balanceDue,
+        string $memberName,
+        string $sequence,
+        string $balanceDue,
         ?string $dueDate,
+        int $targetYear,
+        ?string $membershipStatus,
     ): string {
-        $notice = match ($sequence) {
-            'first'  => 'This is a courtesy reminder',
-            'second' => 'This is your SECOND NOTICE',
-            'final'  => 'This is your FINAL NOTICE — failure to pay may result in membership suspension',
-            default  => 'This is a reminder',
+        $opening = match ($sequence) {
+            'upcoming' => 'Your annual ICGU membership renewal is approaching.',
+            'first' => 'Your annual ICGU membership renewal is now due.',
+            'second' => 'This is a second notice that your annual ICGU membership renewal remains outstanding.',
+            'final' => 'This is a final reminder that your annual ICGU membership renewal remains outstanding.',
+            default => 'This is a reminder about your annual ICGU membership renewal.',
         };
+
+        $statusLine = $membershipStatus === 'EXPIRED'
+            ? 'Your membership is currently expired and can be reactivated when the applicable renewal period is fully paid.'
+            : 'Please settle the renewal by the due date to maintain uninterrupted membership standing.';
 
         return <<<TEXT
 Dear {$memberName},
 
-{$notice} that your ICGU annual membership fee of UGX {$balanceDue} was due on {$dueDate}.
+{$opening}
 
-Please arrange immediate payment to maintain your membership standing.
+Renewal year: {$targetYear}
+Outstanding amount: UGX {$balanceDue}
+Due date: {$dueDate}
 
-For payment details or queries, contact the ICGU Secretariat:
-Email: secretary@icgu.org
-Phone: +256 XXX XXX XXX
+{$statusLine}
+
+For payment details or assistance, contact the Institute of Corporate Governance Uganda:
+Email: icgu@icgu.org
+Phone: +256 414 250239/7
 
 Thank you for your continued membership.
 
-Warm regards,
-The ICGU Membership Team
+ICGU Membership Team
 Institute of Corporate Governance Uganda
-
----
-This is an automated notification. Please do not reply directly to this email.
 TEXT;
     }
 }

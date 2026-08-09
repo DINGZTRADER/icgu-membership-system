@@ -28,6 +28,7 @@ class FinancialLedger extends Model
 
     public function member(): BelongsTo { return $this->belongsTo(Member::class, 'member_id'); }
     public function application(): BelongsTo { return $this->belongsTo(MembershipApplication::class, 'membership_application_id'); }
+    public function renewal(): BelongsTo { return $this->belongsTo(MembershipRenewal::class, 'membership_renewal_id'); }
     public function period(): BelongsTo { return $this->belongsTo(MembershipPeriod::class, 'period_id'); }
     public function status(): BelongsTo { return $this->belongsTo(LookupStatus::class, 'status_id'); }
     public function createdBy(): BelongsTo { return $this->belongsTo(User::class, 'created_by'); }
