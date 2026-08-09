@@ -6,13 +6,17 @@ namespace App\Http\Controllers;
 
 use App\Models\MembershipApplication;
 use App\Services\MembershipApplicationService;
+use App\Services\MembershipPaymentService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 
 final class StaffMembershipApplicationController extends Controller
 {
-    public function __construct(private readonly MembershipApplicationService $applications) {}
+    public function __construct(
+        private readonly MembershipApplicationService $applications,
+        private readonly MembershipPaymentService $payments,
+    ) {}
 
     public function index(Request $request): JsonResponse
     {
@@ -23,7 +27,7 @@ final class StaffMembershipApplicationController extends Controller
             'per_page' => ['nullable', 'integer', 'min:10', 'max:100'],
         ]);
 
-        $query = MembershipApplication::query()->with(['plan', 'organisation', 'representatives'])->latest('submitted_at');
+        $query = MembershipApplication::query()->with(['plan', 'organisation', 'representatives', 'invoice'])->latest('submitted_at');
 
         $query->when($filters['status'] ?? null, fn ($q, $status) => $q->where('status', $status));
         $query->when($filters['plan'] ?? null, fn ($q, $plan) => $q->whereHas('plan', fn ($p) => $p->where('code', $plan)));
@@ -41,7 +45,7 @@ final class StaffMembershipApplicationController extends Controller
     public function show(string $reference): JsonResponse
     {
         return response()->json([
-            'data' => $this->find($reference)->load(['plan', 'organisation', 'representatives', 'documents']),
+            'data' => $this->find($reference)->load(['plan', 'organisation', 'representatives', 'documents', 'invoice.settlements', 'payments.receipt']),
         ]);
     }
 
@@ -55,7 +59,9 @@ final class StaffMembershipApplicationController extends Controller
     {
         $validated = $request->validate(['notes' => ['nullable', 'string', 'max:5000']]);
         $application = $this->applications->approvePendingPayment($this->find($reference), $request->user(), $validated['notes'] ?? null);
-        return response()->json(['data' => $application]);
+        $invoice = $this->payments->createInvoice($application, $request->user());
+
+        return response()->json(['data' => ['application' => $application, 'invoice' => $invoice]]);
     }
 
     public function reject(Request $request, string $reference): JsonResponse
