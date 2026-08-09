@@ -6,6 +6,7 @@ use App\Http\Controllers\StaffMemberController;
 use App\Http\Controllers\StaffMembershipApplicationController;
 use App\Http\Controllers\StaffMembershipBillingController;
 use App\Http\Controllers\StaffMembershipDocumentController;
+use App\Http\Controllers\StaffMembershipRenewalController;
 use App\Http\Controllers\StaffOrganisationController;
 use Illuminate\Support\Facades\Route;
 
@@ -17,6 +18,15 @@ Route::prefix('staff/membership')->middleware('auth')->group(function (): void {
     Route::middleware('permission:members.view')->group(function (): void {
         Route::get('/members', [StaffMemberController::class, 'index']);
         Route::get('/members/{member}', [StaffMemberController::class, 'show']);
+    });
+
+    Route::middleware('permission:renewals.view')->group(function (): void {
+        Route::get('/members/{member}/renewal', [StaffMembershipRenewalController::class, 'show']);
+    });
+
+    Route::middleware('permission:renewals.manage')->group(function (): void {
+        Route::post('/members/{member}/renewal/invoice', [StaffMembershipRenewalController::class, 'invoice']);
+        Route::post('/members/{member}/renewals/{renewal}/payments', [StaffMembershipRenewalController::class, 'payment']);
     });
 
     Route::middleware('permission:organisations.view')->group(function (): void {
