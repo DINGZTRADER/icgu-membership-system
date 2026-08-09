@@ -102,13 +102,15 @@ class DatabaseSeeder extends Seeder
                     'target_year' => $data['period_year'], 'is_backdated' => false, 'is_future' => false, 'created_by' => $adminUser->id,
                 ]);
 
+                $prototypeKey = strtoupper(substr(md5($data['email']), 0, 8));
                 $invoice = FinancialLedger::create([
                     'member_id' => $member->id, 'period_id' => $period->id, 'status_id' => $data['inv_status_id'],
-                    'type' => 'invoice', 'fee_type' => $data['fee_type'], 'amount' => $data['invoice_amount'],
+                    'type' => 'invoice', 'invoice_number' => 'ICGU/INV/PROTO/'.$prototypeKey,
+                    'fee_type' => $data['fee_type'], 'amount' => $data['invoice_amount'],
                     'amount_settled' => $data['amount_settled'], 'currency' => 'UGX',
                     'due_date' => now()->parse($data['period_start'])->addDays(30),
                     'settled_at' => $data['amount_settled'] >= $data['invoice_amount'] ? now() : null,
-                    'created_by' => $adminUser->id, 'tx_reference' => 'PROTO-INV-'.strtoupper(substr(md5($data['email']), 0, 8)),
+                    'created_by' => $adminUser->id, 'tx_reference' => 'PROTO-INV-'.$prototypeKey,
                 ]);
 
                 if ((float) $data['amount_settled'] > 0) {

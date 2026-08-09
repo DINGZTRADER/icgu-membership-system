@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use App\Http\Controllers\StaffMemberController;
 use App\Http\Controllers\StaffMembershipApplicationController;
+use App\Http\Controllers\StaffMembershipBillingController;
 use App\Http\Controllers\StaffMembershipDocumentController;
 use App\Http\Controllers\StaffOrganisationController;
 use Illuminate\Support\Facades\Route;
@@ -37,4 +38,17 @@ Route::prefix('staff/membership')->middleware('auth')->group(function (): void {
             Route::post('/applications/{reference}/reject', [StaffMembershipApplicationController::class, 'reject']);
         });
     });
+
+    Route::middleware('permission:finance.view')->group(function (): void {
+        Route::get('/applications/{reference}/billing', [StaffMembershipBillingController::class, 'show']);
+        Route::get('/receipts/{receipt}', [StaffMembershipBillingController::class, 'receipt']);
+    });
+
+    Route::middleware('permission:finance.manage')->group(function (): void {
+        Route::post('/applications/{reference}/invoice', [StaffMembershipBillingController::class, 'invoice']);
+        Route::post('/applications/{reference}/payments', [StaffMembershipBillingController::class, 'payment']);
+    });
+
+    Route::post('/applications/{reference}/admit', [StaffMembershipBillingController::class, 'admit'])
+        ->middleware('permission:applications.admit');
 });

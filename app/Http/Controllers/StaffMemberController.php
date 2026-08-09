@@ -46,8 +46,11 @@ final class StaffMemberController extends Controller
     {
         return response()->json([
             'data' => $member->load([
-                'status', 'membershipPlan', 'organisation', 'sourceApplication', 'emails',
-                'periods', 'ledgerEntries', 'statusHistory',
+                'status', 'membershipPlan', 'organisation', 'emails', 'periods',
+                'ledgerEntries', 'statusHistory',
+                'sourceApplication.invoice.settlements',
+                'sourceApplication.payments.receipt',
+                'sourceApplication.receipts',
             ]),
         ]);
     }

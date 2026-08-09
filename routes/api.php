@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use App\Http\Controllers\PublicMembershipApplicationController;
+use App\Http\Controllers\PublicMembershipBillingController;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('membership')->group(function (): void {
@@ -13,6 +14,9 @@ Route::prefix('membership')->group(function (): void {
         ->middleware('throttle:10,1');
 
     Route::get('/applications/{reference}', [PublicMembershipApplicationController::class, 'show'])
+        ->middleware('throttle:60,1');
+
+    Route::get('/applications/{reference}/billing', [PublicMembershipBillingController::class, 'show'])
         ->middleware('throttle:60,1');
 
     Route::post('/applications/{reference}/documents', [PublicMembershipApplicationController::class, 'uploadDocument'])

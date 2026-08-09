@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 final class MembershipApplication extends Model
 {
@@ -25,39 +26,27 @@ final class MembershipApplication extends Model
         ];
     }
 
-    public function plan(): BelongsTo
+    public function plan(): BelongsTo { return $this->belongsTo(MembershipPlan::class, 'membership_plan_id'); }
+    public function organisation(): BelongsTo { return $this->belongsTo(Organisation::class); }
+    public function applicantUser(): BelongsTo { return $this->belongsTo(User::class, 'applicant_user_id'); }
+    public function decisionMaker(): BelongsTo { return $this->belongsTo(User::class, 'decision_by'); }
+    public function resultingMember(): BelongsTo { return $this->belongsTo(Member::class, 'resulting_member_id'); }
+    public function representatives(): HasMany { return $this->hasMany(ApplicationRepresentative::class); }
+    public function documents(): HasMany { return $this->hasMany(ApplicationDocument::class); }
+
+    public function invoice(): HasOne
     {
-        return $this->belongsTo(MembershipPlan::class, 'membership_plan_id');
+        return $this->hasOne(FinancialLedger::class, 'membership_application_id')->where('type', 'invoice');
     }
 
-    public function organisation(): BelongsTo
+    public function payments(): HasMany
     {
-        return $this->belongsTo(Organisation::class);
+        return $this->hasMany(FinancialLedger::class, 'membership_application_id')->where('type', 'payment')->orderByDesc('received_at');
     }
 
-    public function applicantUser(): BelongsTo
+    public function receipts(): HasMany
     {
-        return $this->belongsTo(User::class, 'applicant_user_id');
-    }
-
-    public function decisionMaker(): BelongsTo
-    {
-        return $this->belongsTo(User::class, 'decision_by');
-    }
-
-    public function resultingMember(): BelongsTo
-    {
-        return $this->belongsTo(Member::class, 'resulting_member_id');
-    }
-
-    public function representatives(): HasMany
-    {
-        return $this->hasMany(ApplicationRepresentative::class);
-    }
-
-    public function documents(): HasMany
-    {
-        return $this->hasMany(ApplicationDocument::class);
+        return $this->hasMany(Receipt::class, 'membership_application_id')->orderByDesc('issued_at');
     }
 
     public function scopeSubmitted(Builder $query): Builder
