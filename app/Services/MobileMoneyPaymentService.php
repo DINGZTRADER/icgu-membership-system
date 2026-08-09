@@ -158,7 +158,13 @@ final class MobileMoneyPaymentService
             $providerAmount = isset($provider['amount']) ? (float) $provider['amount'] : null;
             $providerCurrency = isset($provider['currency']) ? strtoupper((string) $provider['currency']) : null;
             if ($providerAmount === null || abs($providerAmount - (float) $locked->amount) > 0.0001 || $providerCurrency !== strtoupper($locked->currency)) {
-                return $this->markReviewRequired($locked, 'MTN reported SUCCESSFUL but the provider amount or currency did not match the original payment request.');
+                return $this->markReviewRequired($locked, sprintf(
+                    'MTN reported SUCCESSFUL but settlement values did not match the original request. expected_amount=%s expected_currency=%s provider_amount=%s provider_currency=%s',
+                    number_format((float) $locked->amount, 4, '.', ''),
+                    strtoupper((string) $locked->currency),
+                    $providerAmount === null ? 'missing' : number_format($providerAmount, 4, '.', ''),
+                    $providerCurrency ?? 'missing',
+                ));
             }
 
             $transactionReference = $locked->provider_transaction_id ?: 'MTN-'.$locked->external_reference;
