@@ -1,0 +1,13 @@
+@extends('layouts.staff-admin')
+@section('title','Applications')
+@section('page-title','Membership Applications')
+@section('content')
+<div class="section-head"><div><h3>Application work queue</h3><p>Review submitted applications, decisions and payment readiness.</p></div></div>
+<div class="card"><form class="filters" method="GET"><div class="field"><label for="q">Search</label><input id="q" name="q" value="{{ $filters['q'] ?? '' }}" placeholder="Reference, name or email"></div><div class="field"><label for="status">Status</label><select id="status" name="status"><option value="">All statuses</option>@foreach(['draft','submitted','under_review','approved_pending_payment','rejected','withdrawn','admitted'] as $status)<option value="{{ $status }}" @selected(($filters['status'] ?? '')===$status)>{{ ucwords(str_replace('_',' ',$status)) }}</option>@endforeach</select></div><button class="btn btn-primary" type="submit">Apply filters</button><a class="btn btn-soft" href="{{ route('staff.applications.index') }}">Reset</a></form></div>
+<section class="section"><div class="table-wrap"><table class="table"><thead><tr><th>Reference</th><th>Applicant</th><th>Category</th><th>Submitted</th><th>Status</th><th>Invoice balance</th></tr></thead><tbody>
+@forelse($applications as $application)
+@php($name=$application->organisation?->legal_name ?: trim(($application->first_name ?? '').' '.($application->last_name ?? '')))
+<tr><td><a href="{{ route('staff.applications.show',$application->reference) }}"><strong class="mono">{{ $application->reference }}</strong></a></td><td><strong>{{ $name ?: 'Unnamed applicant' }}</strong><br><small>{{ $application->email }}</small></td><td>{{ $application->plan?->name ?? '—' }}</td><td>{{ $application->submitted_at?->format('d M Y') ?? 'Draft' }}</td><td><span class="status {{ in_array($application->status,['submitted','under_review'],true)?'info':($application->status==='approved_pending_payment'?'warn':($application->status==='admitted'?'ok':($application->status==='rejected'?'bad':''))) }}">{{ str_replace('_',' ',$application->status) }}</span></td><td class="money">{{ $application->invoice ? 'UGX '.number_format((float)$application->invoice->balance_due,0) : '—' }}</td></tr>
+@empty<tr><td colspan="6" class="empty">No applications match the selected filters.</td></tr>@endforelse
+</tbody></table></div><div class="pager"><span>Page {{ $applications->currentPage() }} of {{ $applications->lastPage() }}</span><div>@if($applications->previousPageUrl())<a href="{{ $applications->previousPageUrl() }}">Previous</a>@endif @if($applications->nextPageUrl())<a href="{{ $applications->nextPageUrl() }}">Next</a>@endif</div></div></section>
+@endsection

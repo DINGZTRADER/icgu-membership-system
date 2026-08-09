@@ -12,6 +12,7 @@ use App\Http\Controllers\StaffMembershipBillingController;
 use App\Http\Controllers\StaffMembershipDocumentController;
 use App\Http\Controllers\StaffMembershipRenewalController;
 use App\Http\Controllers\StaffOrganisationController;
+use App\Http\Controllers\StaffPortalPageController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', fn () => redirect()->route('member.login'));
@@ -31,6 +32,41 @@ Route::middleware('auth')->group(function (): void {
     Route::get('/member/memberships/{member}/billing', [MemberPortalPageController::class, 'billing'])->name('member.billing');
     Route::post('/member/memberships/{member}/renew', [MemberPortalPageController::class, 'startRenewal'])->name('member.renew');
     Route::post('/member/memberships/{member}/credential', [MemberPortalPageController::class, 'issueCredential'])->name('member.credential.issue');
+});
+
+// Sprint 7 Secretariat and executive admin UI.
+Route::get('/staff/login', [StaffPortalPageController::class, 'loginForm'])->name('staff.login');
+Route::post('/staff/session', [StaffPortalPageController::class, 'login'])->middleware('throttle:10,1')->name('staff.login.submit');
+Route::middleware('auth')->prefix('staff')->group(function (): void {
+    Route::post('/session/logout', [StaffPortalPageController::class, 'logout'])->name('staff.logout');
+    Route::get('/dashboard', [StaffPortalPageController::class, 'dashboard'])->middleware('permission:reports.view')->name('staff.dashboard');
+
+    Route::middleware('permission:applications.view')->group(function (): void {
+        Route::get('/applications', [StaffPortalPageController::class, 'applications'])->name('staff.applications.index');
+        Route::get('/applications/{reference}', [StaffPortalPageController::class, 'application'])->name('staff.applications.show');
+    });
+    Route::middleware('permission:applications.review')->group(function (): void {
+        Route::post('/applications/{reference}/review', [StaffPortalPageController::class, 'startReview'])->name('staff.applications.review');
+        Route::post('/applications/{reference}/approve', [StaffPortalPageController::class, 'approve'])->name('staff.applications.approve');
+        Route::post('/applications/{reference}/reject', [StaffPortalPageController::class, 'reject'])->name('staff.applications.reject');
+    });
+    Route::post('/applications/{reference}/payment', [StaffPortalPageController::class, 'recordApplicationPayment'])->middleware('permission:finance.manage')->name('staff.applications.payment');
+    Route::post('/applications/{reference}/admit', [StaffPortalPageController::class, 'admit'])->middleware('permission:applications.admit')->name('staff.applications.admit');
+
+    Route::middleware('permission:members.view')->group(function (): void {
+        Route::get('/members', [StaffPortalPageController::class, 'members'])->name('staff.members.index');
+        Route::get('/members/{member}', [StaffPortalPageController::class, 'member'])->name('staff.members.show');
+    });
+    Route::post('/members/{member}/portal/invite', [StaffPortalPageController::class, 'invitePortal'])->middleware('permission:portal.manage')->name('staff.members.invite');
+    Route::post('/members/{member}/renew', [StaffPortalPageController::class, 'createRenewal'])->middleware('permission:renewals.manage')->name('staff.members.renew');
+    Route::post('/members/{member}/renewals/{renewal}/payment', [StaffPortalPageController::class, 'recordRenewalPayment'])->middleware('permission:renewals.manage')->name('staff.renewals.payment');
+
+    Route::get('/renewals', [StaffPortalPageController::class, 'renewals'])->middleware('permission:renewals.view')->name('staff.renewals');
+    Route::get('/finance', [StaffPortalPageController::class, 'finance'])->middleware('permission:finance.view')->name('staff.finance');
+    Route::get('/receipts/{receipt}', [StaffPortalPageController::class, 'receipt'])->middleware('permission:finance.view')->name('staff.receipts.show');
+    Route::get('/organisations', [StaffPortalPageController::class, 'organisations'])->middleware('permission:organisations.view')->name('staff.organisations');
+    Route::get('/reports', [StaffPortalPageController::class, 'reports'])->middleware('permission:reports.view')->name('staff.reports');
+    Route::get('/audit', [StaffPortalPageController::class, 'audit'])->middleware('permission:audit.view')->name('staff.audit');
 });
 
 // Existing JSON/session endpoints retained for API and future app clients.
