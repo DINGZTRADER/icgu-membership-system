@@ -90,6 +90,7 @@ jobs:
       - name: Verify membership lifecycle and production integration domains
         run: |
           php artisan icgu:health
+          php artisan icgu:production-check
           php artisan icgu:verify-sprint2
           php artisan icgu:verify-sprint3
           php artisan icgu:verify-sprint4
