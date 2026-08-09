@@ -5,7 +5,6 @@ declare(strict_types=1);
 use App\Services\MembershipApplicationService;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
-use RuntimeException;
 
 Artisan::command('icgu:health', function (): int {
     $this->info('ICGU application booted successfully.');
@@ -28,10 +27,10 @@ Artisan::command('icgu:verify-sprint2', function (): int {
 
         $application = $created['application'];
         if (! $application->tokenMatches($created['token'])) {
-            throw new RuntimeException('Application token verification failed.');
+            throw new \RuntimeException('Application token verification failed.');
         }
         if ($application->tokenMatches('incorrect-token')) {
-            throw new RuntimeException('Invalid application token was accepted.');
+            throw new \RuntimeException('Invalid application token was accepted.');
         }
 
         foreach ([['cv', 1], ['passport_photo', 1], ['passport_photo', 2]] as [$type, $sequence]) {
@@ -47,7 +46,7 @@ Artisan::command('icgu:verify-sprint2', function (): int {
         }
 
         if ($service->missingRequirements($application->refresh()) !== []) {
-            throw new RuntimeException('Individual document requirements were not satisfied.');
+            throw new \RuntimeException('Individual document requirements were not satisfied.');
         }
 
         $corporate = $service->create([
@@ -69,7 +68,7 @@ Artisan::command('icgu:verify-sprint2', function (): int {
         ])['application'];
 
         if ($corporate->organisation === null || $corporate->representatives()->count() !== 1) {
-            throw new RuntimeException('Corporate application relationships failed.');
+            throw new \RuntimeException('Corporate application relationships failed.');
         }
 
         $this->info('Sprint 2 membership application domain verified successfully.');
