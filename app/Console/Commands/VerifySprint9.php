@@ -34,10 +34,12 @@ final class VerifySprint9 extends Command
                 'email' => 'sprint9.approver@prototype.invalid',
                 'password' => 'prototype-password-strong',
                 'is_active' => true,
+            ]);
+            $approver->forceFill([
                 'mfa_secret' => 'SPRINT9TESTSECRET',
                 'mfa_recovery_codes' => [],
                 'mfa_confirmed_at' => now(),
-            ]);
+            ])->save();
             $approver->roles()->attach($role->id);
 
             $csv = implode(',', PilotMemberImportService::HEADER)."\n"
