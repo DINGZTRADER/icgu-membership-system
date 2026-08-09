@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
@@ -33,6 +34,21 @@ class Member extends Model
     public function primaryEmail(): HasOne { return $this->hasOne(MemberEmail::class, 'member_id')->where('is_primary', true)->where('is_active', true); }
     public function periods(): HasMany { return $this->hasMany(MembershipPeriod::class, 'member_id')->orderByDesc('target_year'); }
     public function renewals(): HasMany { return $this->hasMany(MembershipRenewal::class, 'member_id')->orderByDesc('target_year'); }
+    public function portalAccounts(): HasMany { return $this->hasMany(MemberPortalAccount::class, 'member_id'); }
+    public function portalInvitations(): HasMany { return $this->hasMany(MemberPortalInvitation::class, 'member_id')->orderByDesc('created_at'); }
+    public function credentials(): HasMany { return $this->hasMany(MemberCredential::class, 'member_id')->orderByDesc('issued_at'); }
+
+    public function portalUsers(): BelongsToMany
+    {
+        return $this->belongsToMany(User::class, 'member_portal_accounts', 'member_id', 'user_id')
+            ->withPivot(['access_role', 'is_primary', 'linked_at'])
+            ->withTimestamps();
+    }
+
+    public function activeCredential(): HasOne
+    {
+        return $this->hasOne(MemberCredential::class, 'member_id')->whereNull('revoked_at')->latestOfMany('issued_at');
+    }
 
     public function currentPeriod(): HasOne
     {
