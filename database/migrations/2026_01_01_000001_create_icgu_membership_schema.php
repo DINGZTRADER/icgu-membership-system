@@ -226,7 +226,7 @@ return new class extends Migration
             $table->timestamp('sent_at')->nullable();
             $table->timestamp('opened_at')->nullable();
             $table->string('tracking_token', 100)->nullable()->unique();
-            $table->json('meta')->nullable()->comment('Provider response payload, message IDs, bounce reason, etc.');
+            $table->jsonb('meta')->nullable()->comment('Provider response payload, message IDs, bounce reason, etc.');
             $table->foreignId('sent_by')->nullable()->constrained('users')->nullOnDelete();
             $table->timestamps();
 
@@ -235,7 +235,7 @@ return new class extends Migration
             $table->index('campaign_ref', 'idx_comm_logs_campaign_ref');
         });
 
-        // GIN index for meta JSON column
+        // GIN index for meta JSONB column
         DB::statement("CREATE INDEX idx_comm_logs_meta_gin ON communication_logs USING GIN (meta)");
 
         // Partial index: failed communications to facilitate retry queries
