@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   verify:
@@ -43,10 +43,8 @@ jobs:
       MEMBERSHIP_DOCUMENT_DISK: local
 
     steps:
-      - name: Checkout branch head
+      - name: Checkout
         uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.pull_request.head.sha }}
 
       - name: Prepare PHP and PostgreSQL client
         run: |
@@ -58,22 +56,10 @@ jobs:
       - name: Prepare environment
         run: cp .env.example .env
 
-      - name: Install dependencies
+      - name: Install locked dependencies
         run: composer install --no-interaction --prefer-dist --no-progress
 
-      - name: Commit dependency lockfile if absent
-        env:
-          HEAD_BRANCH: ${{ github.head_ref }}
-        run: |
-          if ! git ls-files --error-unmatch composer.lock >/dev/null 2>&1; then
-            git config user.name "github-actions[bot]"
-            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git add composer.lock
-            git commit -m "Lock Composer dependencies"
-            git push origin "HEAD:${HEAD_BRANCH}"
-          fi
-
-      - name: Validate Composer manifest
+      - name: Validate Composer manifest and lockfile
         run: composer validate --no-check-publish
 
       - name: Bootstrap private database schema
