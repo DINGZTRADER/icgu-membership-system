@@ -21,6 +21,7 @@ return new class extends Migration
             $table->index(['membership_application_id', 'type'], 'idx_ledger_application_type');
         });
 
+        DB::statement("UPDATE financial_ledger SET invoice_number = 'ICGU/INV/LEGACY/' || LPAD(id::text, 10, '0') WHERE type = 'invoice' AND invoice_number IS NULL");
         DB::statement('ALTER TABLE financial_ledger ALTER COLUMN member_id DROP NOT NULL');
         DB::statement("ALTER TABLE financial_ledger ADD CONSTRAINT chk_ledger_owner CHECK (member_id IS NOT NULL OR membership_application_id IS NOT NULL)");
         DB::statement("ALTER TABLE financial_ledger ADD CONSTRAINT chk_ledger_payment_method CHECK (payment_method IS NULL OR payment_method IN ('bank_transfer','mobile_money','cash','card','cheque','other'))");
