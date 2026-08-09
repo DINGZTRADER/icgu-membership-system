@@ -11,6 +11,7 @@ use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\View;
+use Illuminate\Support\ViewErrorBag;
 
 final class VerifySprint6 extends Command
 {
@@ -38,6 +39,9 @@ final class VerifySprint6 extends Command
             if (! is_file($css) || ! str_contains((string) file_get_contents($css), '@media(max-width:640px)')) {
                 throw new \RuntimeException('Responsive member portal stylesheet is missing or incomplete.');
             }
+
+            // Web requests receive this via ShareErrorsFromSession middleware. CLI view rendering does not.
+            View::share('errors', new ViewErrorBag());
 
             $member = Member::query()->with(['status','membershipPlan','currentPeriod','latestPeriod','latestRenewal.invoice.settlements','activeCredential'])->firstOrFail();
             $user = User::query()->create([
