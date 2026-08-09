@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Middleware\RequirePermission;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -10,9 +11,11 @@ return Application::configure(basePath: dirname(__DIR__))
         commands: __DIR__.'/../routes/console.php',
         health: '/up',
     )
-    ->withMiddleware(function (Middleware $middleware) {
-        // Enforce lightweight state handshakes for cloud environments
+    ->withMiddleware(function (Middleware $middleware): void {
+        $middleware->alias([
+            'permission' => RequirePermission::class,
+        ]);
     })
-    ->withExceptions(function (Exceptions $exceptions) {
-        // Logging adjustments
+    ->withExceptions(function (Exceptions $exceptions): void {
+        // Central exception reporting is configured per environment.
     })->create();
