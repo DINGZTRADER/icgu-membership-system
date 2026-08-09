@@ -19,6 +19,8 @@ final class RbacSeeder extends Seeder
             ['domain' => 'applications', 'slug' => 'applications.review', 'name' => 'Review and decide membership applications'],
             ['domain' => 'applications', 'slug' => 'applications.manage', 'name' => 'Manage membership applications'],
             ['domain' => 'applications', 'slug' => 'applications.admit', 'name' => 'Admit fully paid approved applicants'],
+            ['domain' => 'renewals', 'slug' => 'renewals.view', 'name' => 'View membership renewals and arrears'],
+            ['domain' => 'renewals', 'slug' => 'renewals.manage', 'name' => 'Manage renewal invoices and payments'],
             ['domain' => 'documents', 'slug' => 'documents.view', 'name' => 'View membership documents'],
             ['domain' => 'documents', 'slug' => 'documents.manage', 'name' => 'Manage membership documents'],
             ['domain' => 'organisations', 'slug' => 'organisations.view', 'name' => 'View organisations'],
@@ -38,11 +40,11 @@ final class RbacSeeder extends Seeder
 
         $roles = [
             'super-admin' => ['Super Admin', array_column($permissions, 'slug')],
-            'ceo' => ['CEO', ['members.view', 'applications.view', 'applications.review', 'applications.admit', 'documents.view', 'organisations.view', 'finance.view', 'training.view', 'reports.view', 'audit.view']],
-            'membership-officer' => ['Membership Officer', ['members.view', 'members.manage', 'applications.view', 'applications.review', 'applications.manage', 'applications.admit', 'documents.view', 'documents.manage', 'organisations.view', 'organisations.manage', 'reports.view']],
-            'finance-officer' => ['Finance Officer', ['members.view', 'applications.view', 'organisations.view', 'finance.view', 'finance.manage', 'reports.view']],
+            'ceo' => ['CEO', ['members.view', 'applications.view', 'applications.review', 'applications.admit', 'renewals.view', 'documents.view', 'organisations.view', 'finance.view', 'training.view', 'reports.view', 'audit.view']],
+            'membership-officer' => ['Membership Officer', ['members.view', 'members.manage', 'applications.view', 'applications.review', 'applications.manage', 'applications.admit', 'renewals.view', 'renewals.manage', 'documents.view', 'documents.manage', 'organisations.view', 'organisations.manage', 'reports.view']],
+            'finance-officer' => ['Finance Officer', ['members.view', 'applications.view', 'renewals.view', 'renewals.manage', 'organisations.view', 'finance.view', 'finance.manage', 'reports.view']],
             'training-officer' => ['Training Officer', ['members.view', 'organisations.view', 'training.view', 'training.manage', 'reports.view']],
-            'auditor' => ['Auditor', ['members.view', 'applications.view', 'documents.view', 'organisations.view', 'finance.view', 'reports.view', 'audit.view']],
+            'auditor' => ['Auditor', ['members.view', 'applications.view', 'renewals.view', 'documents.view', 'organisations.view', 'finance.view', 'reports.view', 'audit.view']],
             'member' => ['Member', []],
         ];
 
