@@ -205,9 +205,17 @@ final class VerifySprint8 extends Command
         $mobile = app(MobileMoneyPaymentService::class);
         $paymentRequest = $mobile->initiateMtn($renewal->invoice, '+256 772 000 002', $actor);
         $settled = $mobile->reconcile($paymentRequest);
+        $renewalState = $renewal->refresh();
 
-        if ($settled->status !== 'successful' || $renewal->refresh()->status !== 'renewed' || $renewal->refresh()->resulting_period_id === null) {
-            throw new \RuntimeException('Verified MTN renewal payment did not create the paid membership period.');
+        if ($settled->status !== 'successful' || $renewalState->status !== 'renewed' || $renewalState->resulting_period_id === null) {
+            throw new \RuntimeException(sprintf(
+                'Verified MTN renewal payment did not create the paid membership period. payment_request=%s provider_status=%s renewal=%s resulting_period=%s reason=%s',
+                $settled->status,
+                (string) $settled->provider_status,
+                $renewalState->status,
+                $renewalState->resulting_period_id === null ? 'null' : (string) $renewalState->resulting_period_id,
+                (string) ($settled->failure_reason ?? 'none'),
+            ));
         }
         if (FinancialLedger::query()->where('tx_reference', 'MTN-CI-RENEW-001')->count() !== 1) {
             throw new \RuntimeException('Verified MTN renewal payment was not posted exactly once.');
