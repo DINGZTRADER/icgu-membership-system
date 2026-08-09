@@ -28,6 +28,9 @@ final class MemberPortalService
         if (! in_array($accessRole, ['owner', 'representative', 'billing'], true)) {
             throw ValidationException::withMessages(['access_role' => 'Unsupported portal access role.']);
         }
+        if ($member->type === 'individual' && $accessRole !== 'owner') {
+            throw ValidationException::withMessages(['access_role' => 'Individual memberships may only be linked as owner accounts.']);
+        }
 
         return DB::transaction(function () use ($member, $email, $accessRole, $actor, $ttlHours): array {
             MemberPortalInvitation::query()
@@ -120,15 +123,16 @@ final class MemberPortalService
         });
     }
 
-    public function assertAccess(User $user, Member $member): MemberPortalAccount
+    /** @param list<string>|null $allowedRoles */
+    public function assertAccess(User $user, Member $member, ?array $allowedRoles = null): MemberPortalAccount
     {
         $account = MemberPortalAccount::query()
             ->where('user_id', $user->id)
             ->where('member_id', $member->id)
             ->first();
 
-        if ($account === null) {
-            abort(403, 'You do not have access to this membership.');
+        if ($account === null || ($allowedRoles !== null && ! in_array($account->access_role, $allowedRoles, true))) {
+            abort(403, 'You do not have access to this membership action.');
         }
 
         return $account;
@@ -136,7 +140,7 @@ final class MemberPortalService
 
     public function updateProfile(User $user, Member $member, array $attributes): Member
     {
-        $this->assertAccess($user, $member);
+        $this->assertAccess($user, $member, ['owner', 'representative']);
         $before = $member->only(['phone', 'job_title', 'organization']);
 
         $allowed = ['phone'];
