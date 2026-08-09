@@ -74,7 +74,7 @@ final class VerifySprint6 extends Command
             }
 
             $login = view('member.login')->render();
-            if (! str_contains($login, 'Sign in to Member Portal') || ! str_contains($login, 'csrf')) {
+            if (! str_contains($login, 'Sign in to Member Portal') || ! str_contains($login, 'name="_token"')) {
                 throw new \RuntimeException('Login page is missing the portal form or CSRF field.');
             }
 
