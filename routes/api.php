@@ -2,9 +2,11 @@
 
 declare(strict_types=1);
 
+use App\Http\Controllers\MtnMomoWebhookController;
 use App\Http\Controllers\PublicMembershipApplicationController;
 use App\Http\Controllers\PublicMembershipBillingController;
 use App\Http\Controllers\PublicMembershipVerificationController;
+use App\Http\Controllers\PublicMobileMoneyPaymentController;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('membership')->group(function (): void {
@@ -23,9 +25,21 @@ Route::prefix('membership')->group(function (): void {
     Route::get('/applications/{reference}/billing', [PublicMembershipBillingController::class, 'show'])
         ->middleware('throttle:60,1');
 
+    Route::post('/applications/{reference}/billing/mtn-momo', [PublicMobileMoneyPaymentController::class, 'initiate'])
+        ->middleware('throttle:6,1');
+
+    Route::get('/applications/{reference}/billing/mtn-momo/{externalReference}', [PublicMobileMoneyPaymentController::class, 'status'])
+        ->middleware('throttle:60,1');
+
     Route::post('/applications/{reference}/documents', [PublicMembershipApplicationController::class, 'uploadDocument'])
         ->middleware('throttle:30,1');
 
     Route::post('/applications/{reference}/submit', [PublicMembershipApplicationController::class, 'submit'])
         ->middleware('throttle:10,1');
 });
+
+// MTN callbacks are advisory only. The handler records evidence and queues a status poll
+// before any financial-ledger entry is created.
+Route::match(['post', 'put'], '/integrations/mtn-momo/callback/{externalReference}', MtnMomoWebhookController::class)
+    ->whereUuid('externalReference')
+    ->middleware('throttle:240,1');
