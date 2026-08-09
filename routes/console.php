@@ -7,5 +7,5 @@ use Illuminate\Support\Facades\Artisan;
 Artisan::command('icgu:health', function (): int {
     $this->info('ICGU application booted successfully.');
 
-    return self::SUCCESS;
+    return 0;
 })->purpose('Verify that the ICGU Laravel application can boot.');
