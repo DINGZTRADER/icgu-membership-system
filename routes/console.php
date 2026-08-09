@@ -300,10 +300,11 @@ Artisan::command('icgu:verify-sprint4', function (): int {
             'is_primary' => true,
             'is_active' => true,
         ]);
+        $earlyStart = today()->subYear()->addDay();
         $earlyMember->periods()->create([
-            'start_date' => today()->subYear()->addDay()->toDateString(),
+            'start_date' => $earlyStart->toDateString(),
             'end_date' => today()->toDateString(),
-            'target_year' => (int) today()->format('Y'),
+            'target_year' => (int) $earlyStart->format('Y'),
             'is_backdated' => false,
             'is_future' => false,
             'created_by' => $actor->id,
@@ -335,10 +336,11 @@ Artisan::command('icgu:verify-sprint4', function (): int {
             'is_primary' => true,
             'is_active' => true,
         ]);
+        $reminderStart = today()->subYear()->addDays(6);
         $reminderMember->periods()->create([
-            'start_date' => today()->subYear()->addDays(6)->toDateString(),
+            'start_date' => $reminderStart->toDateString(),
             'end_date' => today()->addDays(5)->toDateString(),
-            'target_year' => (int) today()->format('Y'),
+            'target_year' => (int) $reminderStart->format('Y'),
             'is_backdated' => false,
             'is_future' => false,
             'created_by' => $actor->id,
