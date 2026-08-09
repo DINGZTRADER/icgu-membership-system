@@ -97,6 +97,7 @@ jobs:
           php artisan icgu:verify-sprint6
           php artisan icgu:verify-sprint7
           php artisan icgu:verify-sprint8
+          php artisan icgu:verify-sprint8-payment-race
           php artisan icgu:reconcile-mobile-money --limit=1
           php artisan route:list --path=api/membership
           php artisan route:list --path=api/integrations/mtn-momo
