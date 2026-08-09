@@ -48,7 +48,7 @@
         @if($member->payments->isEmpty())<div class="empty">No payments are recorded for this membership.</div>@else
         <div class="table-wrap" style="border:0"><table class="table"><thead><tr><th>Date</th><th>Reference</th><th>Method</th><th>Amount</th><th>Receipt</th></tr></thead><tbody>
         @foreach($member->payments as $payment)
-            <tr><td>{{ ($payment->received_at ?? $payment->created_at)?->format('d M Y') }}</td><td>{{ $payment->reference ?? $payment->external_reference ?? '—' }}</td><td>{{ ucwords(str_replace('_',' ',$payment->payment_method ?? 'payment')) }}</td><td class="money">UGX {{ number_format((float)$payment->amount,0) }}</td><td>{{ $payment->receipt?->receipt_number ?? '—' }}</td></tr>
+            <tr><td>{{ ($payment->received_at ?? $payment->created_at)?->format('d M Y') }}</td><td>{{ $payment->tx_reference ?? '—' }}</td><td>{{ ucwords(str_replace('_',' ',$payment->payment_method ?? 'payment')) }}</td><td class="money">UGX {{ number_format((float)$payment->amount,0) }}</td><td>{{ $payment->receipt?->receipt_number ?? '—' }}</td></tr>
         @endforeach
         </tbody></table></div>@endif
     </div>
