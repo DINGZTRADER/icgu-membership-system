@@ -6,6 +6,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 
@@ -30,6 +31,18 @@ final class User extends Authenticatable
     public function roles(): BelongsToMany
     {
         return $this->belongsToMany(Role::class)->withTimestamps();
+    }
+
+    public function portalAccounts(): HasMany
+    {
+        return $this->hasMany(MemberPortalAccount::class, 'user_id');
+    }
+
+    public function memberships(): BelongsToMany
+    {
+        return $this->belongsToMany(Member::class, 'member_portal_accounts', 'user_id', 'member_id')
+            ->withPivot(['access_role', 'is_primary', 'linked_at'])
+            ->withTimestamps();
     }
 
     public function hasRole(string $role): bool
