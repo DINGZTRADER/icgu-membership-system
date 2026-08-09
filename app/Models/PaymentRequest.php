@@ -39,6 +39,6 @@ final class PaymentRequest extends Model
 
     public function getIsTerminalAttribute(): bool
     {
-        return in_array($this->status, ['successful', 'failed', 'expired', 'cancelled'], true);
+        return in_array($this->status, ['successful', 'failed', 'review_required', 'expired', 'cancelled'], true);
     }
 }
