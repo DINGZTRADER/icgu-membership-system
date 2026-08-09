@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace App\Services;
 
 use App\Models\ApplicationDocument;
-use App\Models\ApplicationRepresentative;
 use App\Models\MembershipApplication;
 use App\Models\MembershipPlan;
 use App\Models\Organisation;
@@ -35,7 +34,8 @@ final class MembershipApplicationService
                 $organisation = Organisation::query()->create($data['organisation']);
             }
 
-            $application = MembershipApplication::query()->create([
+            $application = new MembershipApplication();
+            $application->forceFill([
                 'reference' => $this->nextReference(),
                 'access_token_hash' => hash('sha256', $token),
                 'membership_plan_id' => $plan->id,
@@ -49,6 +49,7 @@ final class MembershipApplicationService
                 'institution_name' => $data['institution_name'] ?? null,
                 'applicant_notes' => $data['applicant_notes'] ?? null,
             ]);
+            $application->save();
 
             foreach ($data['representatives'] ?? [] as $index => $representative) {
                 $application->representatives()->create([
