@@ -29,26 +29,15 @@ class Member extends Model
     public function sourceApplication(): BelongsTo { return $this->belongsTo(MembershipApplication::class, 'source_application_id'); }
     public function organisation(): BelongsTo { return $this->belongsTo(Organisation::class); }
 
-    public function emails(): HasMany
-    {
-        return $this->hasMany(MemberEmail::class, 'member_id')->orderByDesc('is_primary');
-    }
-
-    public function primaryEmail(): HasOne
-    {
-        return $this->hasOne(MemberEmail::class, 'member_id')->where('is_primary', true)->where('is_active', true);
-    }
-
-    public function periods(): HasMany
-    {
-        return $this->hasMany(MembershipPeriod::class, 'member_id')->orderByDesc('target_year');
-    }
+    public function emails(): HasMany { return $this->hasMany(MemberEmail::class, 'member_id')->orderByDesc('is_primary'); }
+    public function primaryEmail(): HasOne { return $this->hasOne(MemberEmail::class, 'member_id')->where('is_primary', true)->where('is_active', true); }
+    public function periods(): HasMany { return $this->hasMany(MembershipPeriod::class, 'member_id')->orderByDesc('target_year'); }
 
     public function currentPeriod(): HasOne
     {
         return $this->hasOne(MembershipPeriod::class, 'member_id')
-            ->where('start_date', '<=', now())
-            ->where('end_date', '>=', now())
+            ->whereDate('start_date', '<=', today())
+            ->whereDate('end_date', '>=', today())
             ->latestOfMany('target_year');
     }
 
