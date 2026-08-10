@@ -16,6 +16,11 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        // Laravel Cloud terminates HTTPS at its edge and forwards requests to
+        // the application. Trust the platform proxy headers so Laravel sees
+        // the original HTTPS scheme/host when creating sessions and URLs.
+        $middleware->trustProxies(at: '*');
+
         $middleware->alias([
             'permission' => RequirePermission::class,
             'staff.mfa' => RequireStaffMfa::class,
