@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Http\Controllers\GoogleStaffAuthController;
 use App\Http\Controllers\MemberMobileMoneyPaymentController;
 use App\Http\Controllers\MemberPortalAuthController;
 use App\Http\Controllers\MemberPortalController;
@@ -38,7 +39,11 @@ Route::middleware('auth')->group(function (): void {
     Route::post('/member/memberships/{member}/credential', [MemberPortalPageController::class, 'issueCredential'])->name('member.credential.issue');
 });
 
-// Secretariat authentication and mandatory MFA.
+// Google Workspace is the preferred Secretariat sign-in path.
+Route::get('/auth/google/staff', [GoogleStaffAuthController::class, 'redirect'])->middleware('throttle:20,1')->name('staff.google.redirect');
+Route::get('/auth/google/staff/callback', [GoogleStaffAuthController::class, 'callback'])->middleware('throttle:20,1')->name('staff.google.callback');
+
+// Existing password + TOTP routes remain available as a controlled fallback.
 Route::get('/staff/login', [StaffPortalAuthController::class, 'loginForm'])->name('staff.login');
 Route::post('/staff/session', [StaffPortalAuthController::class, 'login'])->middleware('throttle:10,1')->name('staff.login.submit');
 Route::get('/staff/mfa/challenge', [StaffMfaController::class, 'challengeForm'])->middleware('throttle:30,1')->name('staff.mfa.challenge');
@@ -51,7 +56,7 @@ Route::middleware('auth')->prefix('staff')->group(function (): void {
     Route::get('/mfa/recovery-codes', [StaffMfaController::class, 'recoveryCodes'])->name('staff.mfa.recovery');
 });
 
-// Sprint 7 Secretariat and executive admin UI, protected by Sprint 8 MFA.
+// Sprint 7 Secretariat and executive admin UI, protected by Sprint 8 MFA or verified Google Workspace sign-in.
 Route::middleware(['auth', 'staff.mfa'])->prefix('staff')->group(function (): void {
     Route::get('/dashboard', [StaffPortalPageController::class, 'dashboard'])->middleware('permission:reports.view')->name('staff.dashboard');
 

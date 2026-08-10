@@ -6,15 +6,10 @@
     <div class="brand-mark">ICGU</div>
     <span class="eyebrow">Secretariat & Executive Portal</span>
     <h1>Staff sign in</h1>
-    <p>Operational access for authorised ICGU Secretariat, finance, audit and executive users.</p>
+    <p>Use your authorised ICGU Google Workspace account.</p>
     @if($errors->any())<div class="notice error">{{ $errors->first() }}</div>@endif
-    <form method="POST" action="{{ route('staff.login.submit') }}">
-        @csrf
-        <div class="field"><label for="email">Work email</label><input id="email" name="email" type="email" value="{{ old('email') }}" autocomplete="username" required autofocus></div>
-        <div class="field"><label for="password">Password</label><input id="password" name="password" type="password" autocomplete="current-password" required></div>
-        <button class="btn btn-primary" type="submit">Sign in to Secretariat Portal</button>
-    </form>
-    <p style="font-size:12px;margin-top:20px">Access is permission-controlled and all material membership and financial actions are audit logged.</p>
+    <a class="btn btn-primary" href="{{ route('staff.google.redirect') }}" style="display:block;text-align:center;text-decoration:none">Continue with Google</a>
+    <p style="font-size:12px;margin-top:20px">Only active staff accounts already registered by ICGU can access the Secretariat portal.</p>
 </div>
 </body>
 </html>

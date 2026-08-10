@@ -28,6 +28,10 @@ final class MemberPortalPageController extends Controller
         $user = $request->user();
 
         if ($user?->hasStaffRole()) {
+            if ($request->session()->has('staff_google_authenticated_at')) {
+                return redirect()->route('staff.dashboard');
+            }
+
             if ($user->requiresStaffMfa() && $user->mfa_confirmed_at === null) {
                 return redirect()->route('staff.mfa.setup');
             }
