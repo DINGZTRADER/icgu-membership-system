@@ -14,8 +14,14 @@ final class StaffPortalAuthController extends Controller
 {
     public function loginForm(Request $request): View|RedirectResponse
     {
-        if ($request->user()?->hasStaffRole()) {
-            return redirect()->route($request->user()->mfa_confirmed_at ? 'staff.dashboard' : 'staff.mfa.setup');
+        $user = $request->user();
+
+        if ($user?->hasStaffRole()) {
+            if ($user->requiresStaffMfa() && $user->mfa_confirmed_at === null) {
+                return redirect()->route('staff.mfa.setup');
+            }
+
+            return redirect()->route('staff.dashboard');
         }
 
         return view('staff.login');
