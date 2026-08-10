@@ -129,6 +129,10 @@ jobs:
           grep -q 'member.billing.mtn-momo' routes/web.php
           grep -q 'mtn-momo/callback' routes/api.php
           grep -q 'PILOT_IMPORT_MAX_ROWS' .env.example
+          grep -q 'id="mfa-qr"' resources/views/staff/mfa-setup.blade.php
+          grep -q 'qrcodejs/1.0.0/qrcode.min.js' resources/views/staff/mfa-setup.blade.php
+          grep -q 'sha512-CNgIRecGo7nphbeZ04Sc13ka07paqdeTu0WR1IM4kNcpmBAUSHSQX0FslNhTDadL4O5SAGapGt4FodqL8My0mA==' resources/views/staff/mfa-setup.blade.php
+          grep -q 'provisioningUri = @json' resources/views/staff/mfa-setup.blade.php
           test "$(psql -At -h 127.0.0.1 -U postgres -d icgu_test -c "select renewal_fee::int from icgu.membership_plans where code = 'individual'")" -eq 100000
           test "$(psql -At -h 127.0.0.1 -U postgres -d icgu_test -c "select renewal_fee::int from icgu.membership_plans where code = 'student'")" -eq 50000
           test "$(psql -At -h 127.0.0.1 -U postgres -d icgu_test -c "select renewal_fee::int from icgu.membership_plans where code = 'ngo-corporate'")" -eq 1000000
