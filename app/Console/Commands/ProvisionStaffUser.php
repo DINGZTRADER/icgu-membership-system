@@ -17,7 +17,8 @@ final class ProvisionStaffUser extends Command
         {email : Staff email address}
         {role : Staff role slug}
         {--name= : Staff display name}
-        {--reset-password : Replace the password for an existing account}';
+        {--reset-password : Replace the password for an existing account}
+        {--password-env= : Environment variable containing the initial/reset password for non-interactive provisioning}';
 
     protected $description = 'Provision or update a real ICGU staff account without storing credentials in source control or shell arguments.';
 
@@ -45,6 +46,11 @@ final class ProvisionStaffUser extends Command
         $user = User::query()->where('email', $email)->first();
         $name = trim((string) ($this->option('name') ?: $user?->name ?: ''));
         if ($name === '') {
+            if (! $this->input->isInteractive()) {
+                $this->error('Staff name is required in non-interactive environments. Use --name="Full Name".');
+                return self::FAILURE;
+            }
+
             $name = trim((string) $this->ask('Staff name'));
         }
         if ($name === '' || mb_strlen($name) > 150) {
@@ -55,13 +61,36 @@ final class ProvisionStaffUser extends Command
         $needsPassword = $user === null || (bool) $this->option('reset-password');
         $password = null;
         if ($needsPassword) {
-            $password = (string) $this->secret('Password (minimum 12 characters)');
+            $passwordEnv = trim((string) $this->option('password-env'));
+
+            if ($passwordEnv !== '') {
+                if (! preg_match('/\A[A-Z][A-Z0-9_]{2,80}\z/', $passwordEnv)) {
+                    $this->error('Password environment variable name must use uppercase letters, numbers, and underscores only.');
+                    return self::FAILURE;
+                }
+
+                $environmentPassword = getenv($passwordEnv);
+                if ($environmentPassword === false || $environmentPassword === '') {
+                    $this->error("Environment variable {$passwordEnv} is not set or is empty.");
+                    return self::FAILURE;
+                }
+
+                $password = (string) $environmentPassword;
+            } else {
+                if (! $this->input->isInteractive()) {
+                    $this->error('A password source is required in non-interactive environments. Set a temporary secret environment variable and pass --password-env=VARIABLE_NAME.');
+                    return self::FAILURE;
+                }
+
+                $password = (string) $this->secret('Password (minimum 12 characters)');
+                if ($password !== (string) $this->secret('Confirm password')) {
+                    $this->error('Passwords do not match.');
+                    return self::FAILURE;
+                }
+            }
+
             if (mb_strlen($password) < 12 || Str::contains(mb_strtolower($password), mb_strtolower(Str::before($email, '@')))) {
                 $this->error('Password must be at least 12 characters and must not contain the email username.');
-                return self::FAILURE;
-            }
-            if ($password !== (string) $this->secret('Confirm password')) {
-                $this->error('Passwords do not match.');
                 return self::FAILURE;
             }
         }
