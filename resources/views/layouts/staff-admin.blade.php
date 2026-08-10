@@ -8,7 +8,11 @@
     <link rel="stylesheet" href="{{ asset('css/staff-admin.css') }}">
 </head>
 <body>
-@php($staff = auth()->user())
+@php
+    $staff = auth()->user();
+    $staff->loadMissing('roles.permissions');
+    $staffRoleNames = $staff->roles->pluck('name')->join(' · ');
+@endphp
 <div class="shell">
     <aside class="sidebar">
         <div class="brand"><div class="brand-mark">ICGU</div><div><strong>Secretariat Portal</strong><small>Institute of Corporate Governance Uganda</small></div></div>
@@ -29,7 +33,7 @@
             <h1>@yield('page-title','Secretariat')</h1>
             <div class="userbox">
                 <div class="avatar">{{ strtoupper(substr($staff->name,0,1)) }}</div>
-                <div class="user-meta"><strong>{{ $staff->name }}</strong><small>{{ $staff->roles()->pluck('name')->join(' · ') }}</small></div>
+                <div class="user-meta"><strong>{{ $staff->name }}</strong><small>{{ $staffRoleNames }}</small></div>
                 <form method="POST" action="{{ route('staff.logout') }}">@csrf<button class="btn btn-soft" type="submit">Sign out</button></form>
             </div>
         </header>
