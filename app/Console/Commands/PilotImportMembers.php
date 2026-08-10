@@ -19,7 +19,7 @@ final class PilotImportMembers extends Command
         {--commit : Commit only when every row validates without conflicts}
         {--approved-by= : Active Secretariat email that approved this import}';
 
-    protected $description = 'Validate or commit a controlled, auditable ICGU pilot member CSV import.';
+    protected $description = 'Validate or commit a controlled, auditable ICGU member CSV import.';
 
     public function handle(PilotMemberImportService $imports): int
     {
@@ -39,7 +39,7 @@ final class PilotImportMembers extends Command
                 $contents = Storage::disk($disk)->get($source);
                 $temporary = tempnam(sys_get_temp_dir(), 'icgu-pilot-');
                 if ($temporary === false || file_put_contents($temporary, $contents) === false) {
-                    throw new \RuntimeException('Unable to stage pilot CSV from private storage.');
+                    throw new \RuntimeException('Unable to stage member CSV from private storage.');
                 }
                 $path = $temporary;
             } elseif (! str_starts_with($source, DIRECTORY_SEPARATOR)) {
@@ -56,14 +56,18 @@ final class PilotImportMembers extends Command
                     return self::FAILURE;
                 }
 
-                $approver = User::query()
+                $query = User::query()
                     ->whereRaw('lower(email) = ?', [$email])
-                    ->where('is_active', true)
-                    ->whereNotNull('mfa_confirmed_at')
-                    ->first();
+                    ->where('is_active', true);
+
+                if ((bool) config('production.require_staff_mfa', false)) {
+                    $query->whereNotNull('mfa_confirmed_at');
+                }
+
+                $approver = $query->first();
 
                 if ($approver === null || ! $approver->hasStaffRole()) {
-                    $this->error('Approver must be an active MFA-confirmed Secretariat account.');
+                    $this->error('Approver must be an active Secretariat account'.((bool) config('production.require_staff_mfa', false) ? ' with confirmed MFA.' : '.'));
                     return self::FAILURE;
                 }
             }
@@ -110,11 +114,11 @@ final class PilotImportMembers extends Command
             }
 
             if ($batch->status !== 'committed') {
-                $this->error('Pilot import did not reach committed state.');
+                $this->error('Member import did not reach committed state.');
                 return self::FAILURE;
             }
 
-            $this->info('Controlled pilot import committed successfully.');
+            $this->info('Controlled member import committed successfully.');
             return self::SUCCESS;
         } catch (ValidationException $exception) {
             foreach ($exception->errors() as $messages) {
