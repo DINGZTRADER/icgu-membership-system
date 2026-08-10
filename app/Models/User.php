@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -50,23 +51,39 @@ final class User extends Authenticatable
 
     public function hasRole(string $role): bool
     {
-        return $this->roles()->where('slug', $role)->exists();
+        return $this->authorizationRoles()->contains('slug', $role);
     }
 
     public function hasPermission(string $permission): bool
     {
-        return $this->roles()
-            ->whereHas('permissions', fn ($query) => $query->where('slug', $permission))
-            ->exists();
+        return $this->authorizationRoles()->contains(
+            fn (Role $role): bool => $role->permissions->contains('slug', $permission),
+        );
     }
 
     public function hasStaffRole(): bool
     {
-        return $this->roles()->where('slug', '<>', 'member')->exists();
+        return $this->authorizationRoles()->contains(
+            fn (Role $role): bool => $role->slug !== 'member',
+        );
     }
 
     public function requiresStaffMfa(): bool
     {
         return $this->hasStaffRole() && (bool) config('production.require_staff_mfa', false);
+    }
+
+    /**
+     * Load roles and permissions once on this authenticated User instance.
+     * Middleware and Blade reuse the same relation graph for the rest of the
+     * request instead of issuing a new database query for every permission.
+     *
+     * @return Collection<int,Role>
+     */
+    private function authorizationRoles(): Collection
+    {
+        $this->loadMissing('roles.permissions');
+
+        return $this->roles;
     }
 }
