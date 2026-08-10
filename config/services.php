@@ -3,6 +3,13 @@
 declare(strict_types=1);
 
 return [
+    'google' => [
+        'client_id' => env('GOOGLE_CLIENT_ID'),
+        'client_secret' => env('GOOGLE_CLIENT_SECRET'),
+        'redirect' => env('GOOGLE_REDIRECT_URI', rtrim((string) env('APP_URL', ''), '/').'/auth/google/staff/callback'),
+        'hosted_domain' => env('GOOGLE_HOSTED_DOMAIN', 'icgu.org'),
+    ],
+
     'mtn_momo' => [
         'enabled' => (bool) env('MTN_MOMO_ENABLED', false),
         'base_url' => rtrim((string) env('MTN_MOMO_BASE_URL', 'https://sandbox.momodeveloper.mtn.com'), '/'),
