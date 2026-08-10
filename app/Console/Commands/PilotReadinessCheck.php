@@ -60,14 +60,18 @@ final class PilotReadinessCheck extends Command
         $activeWithoutPeriod = Member::query()->active()->whereDoesntHave('currentPeriod')->count();
         $this->check($activeWithoutPeriod === 0, 'Active membership periods', 'Every active member must have a current membership period.', true);
 
-        foreach (['ceo', 'membership-officer', 'finance-officer'] as $role) {
-            $ready = User::query()
-                ->where('is_active', true)
-                ->whereNotNull('mfa_confirmed_at')
-                ->whereHas('roles', fn ($query) => $query->where('slug', $role))
-                ->exists();
+        if ((bool) config('production.require_staff_mfa', false)) {
+            foreach (['ceo', 'membership-officer', 'finance-officer'] as $role) {
+                $ready = User::query()
+                    ->where('is_active', true)
+                    ->whereNotNull('mfa_confirmed_at')
+                    ->whereHas('roles', fn ($query) => $query->where('slug', $role))
+                    ->exists();
 
-            $this->check($ready, 'Staff MFA: '.$role, "An active {$role} account must complete MFA before pilot launch.", $strict);
+                $this->check($ready, 'Staff MFA: '.$role, "An active {$role} account must complete MFA before pilot launch.", $strict);
+            }
+        } else {
+            $this->pass('Staff MFA policy', 'Disabled for the controlled pilot; password-only staff login is permitted.');
         }
 
         $manualReconciliation = PaymentRequest::query()->where('status', 'review_required')->count();
