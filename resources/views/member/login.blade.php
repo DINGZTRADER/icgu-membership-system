@@ -16,7 +16,7 @@
         <div>
             <span class="eyebrow">Good governance. Stronger institutions.</span>
             <h1>One secure sign-in for ICGU members and staff.</h1>
-            <p>Use your ICGU account below. Members are taken to the membership portal, while authorised Secretariat and finance staff are automatically routed to the staff portal and MFA.</p>
+            <p>ICGU staff can sign in with their work Google account. Members can continue using their portal email and password.</p>
         </div>
         <small>ICGU · Plot 5 Katego Road, Kamwokya, Kampala · icgu@icgu.org</small>
     </section>
@@ -24,22 +24,28 @@
         <div class="login-box">
             <span class="eyebrow">Secure access</span>
             <h2>Sign in to ICGU</h2>
-            <p>Members and authorised staff use the same sign-in form.</p>
             @if(session('status'))<div class="notice success">{{ session('status') }}</div>@endif
             @if($errors->any())<div class="notice error">{{ $errors->first() }}</div>@endif
-            <form method="POST" action="{{ route('member.login.submit') }}">
-                @csrf
-                <div class="field">
-                    <label for="email">Email address</label>
-                    <input id="email" name="email" type="email" autocomplete="username" value="{{ old('email') }}" required autofocus>
-                </div>
-                <div class="field">
-                    <label for="password">Password</label>
-                    <input id="password" name="password" type="password" autocomplete="current-password" required>
-                </div>
-                <button class="btn btn-primary" type="submit">Sign in</button>
-            </form>
-            <div class="login-foot">Your account type is detected automatically. Staff accounts are protected by multi-factor authentication. For access assistance, contact <strong>icgu@icgu.org</strong>.</div>
+
+            <a class="btn btn-primary" href="{{ route('staff.google.redirect') }}" style="display:block;text-align:center;text-decoration:none;margin-bottom:18px">Continue with Google</a>
+            <div style="text-align:center;font-size:12px;margin:-6px 0 22px;color:#667085">ICGU Secretariat & staff</div>
+
+            <div style="border-top:1px solid #e5e7eb;padding-top:20px">
+                <p><strong>Member sign in</strong></p>
+                <form method="POST" action="{{ route('member.login.submit') }}">
+                    @csrf
+                    <div class="field">
+                        <label for="email">Email address</label>
+                        <input id="email" name="email" type="email" autocomplete="username" value="{{ old('email') }}" required autofocus>
+                    </div>
+                    <div class="field">
+                        <label for="password">Password</label>
+                        <input id="password" name="password" type="password" autocomplete="current-password" required>
+                    </div>
+                    <button class="btn btn-primary" type="submit">Sign in as member</button>
+                </form>
+            </div>
+            <div class="login-foot">Staff access is limited to authorised ICGU Google Workspace accounts already registered in the system. For access assistance, contact <strong>icgu@icgu.org</strong>.</div>
         </div>
     </main>
 </div>
