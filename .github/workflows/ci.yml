@@ -44,6 +44,7 @@ jobs:
       MEMBERSHIP_DOCUMENT_DISK: local
       MTN_MOMO_ENABLED: false
       PRODUCTION_REQUIRE_LIVE_MAIL: false
+      STAFF_MFA_REQUIRED: true
       PILOT_IMPORT_MAX_ROWS: 50
 
     steps:
