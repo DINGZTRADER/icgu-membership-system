@@ -34,6 +34,8 @@ final class PilotMemberImportService
         'phone',
         'organization',
         'job_title',
+        'membership_tier',
+        'is_job_seeker',
         'registration_date',
         'period_start',
         'period_end',
@@ -50,8 +52,11 @@ final class PilotMemberImportService
             throw ValidationException::withMessages(['source' => 'Pilot import source is not a readable file.']);
         }
 
-        if ($commit && ($approver === null || ! $approver->is_active || ! $approver->hasStaffRole() || $approver->mfa_confirmed_at === null)) {
-            throw ValidationException::withMessages(['approved_by' => 'Commit mode requires an active MFA-confirmed Secretariat approver.']);
+        if ($commit && ($approver === null || ! $approver->is_active || ! $approver->hasStaffRole())) {
+            throw ValidationException::withMessages(['approved_by' => 'Commit mode requires an active Secretariat approver.']);
+        }
+        if ($commit && (bool) config('production.require_staff_mfa', false) && $approver?->mfa_confirmed_at === null) {
+            throw ValidationException::withMessages(['approved_by' => 'Commit mode requires an MFA-confirmed Secretariat approver while staff MFA is enabled.']);
         }
 
         $sourceHash = hash_file('sha256', $path);
@@ -65,10 +70,10 @@ final class PilotMemberImportService
 
         [$rows, $detectedSourceName] = $this->readRows($path);
         $sourceName = trim((string) $sourceName) !== '' ? trim((string) $sourceName) : $detectedSourceName;
-        $maxRows = max(1, (int) config('production.pilot_import_max_rows', 50));
+        $maxRows = max(1, (int) config('production.pilot_import_max_rows', 5000));
         if (count($rows) > $maxRows) {
             throw ValidationException::withMessages([
-                'source' => "Controlled pilot imports are capped at {$maxRows} rows per batch.",
+                'source' => "Controlled imports are capped at {$maxRows} rows per batch.",
             ]);
         }
 
@@ -111,7 +116,7 @@ final class PilotMemberImportService
             'summary' => [
                 'mode' => $commit ? 'commit_requested' : 'dry_run',
                 'max_rows' => $maxRows,
-                'header_version' => 1,
+                'header_version' => 2,
             ],
             'completed_at' => now(),
         ]);
@@ -154,6 +159,8 @@ final class PilotMemberImportService
                         'phone' => $payload['phone'],
                         'organization' => $payload['organization'],
                         'job_title' => $payload['job_title'],
+                        'membership_tier' => $payload['membership_tier'],
+                        'is_job_seeker' => $payload['is_job_seeker'],
                         'registration_date' => $payload['registration_date'],
                         'status_id' => $status->id,
                         'membership_plan_id' => $plan->id,
@@ -174,7 +181,7 @@ final class PilotMemberImportService
                             'target_year' => $payload['target_year'],
                             'is_backdated' => (int) $payload['target_year'] < (int) now()->year,
                             'is_future' => $payload['period_start'] > today()->toDateString(),
-                            'notes' => 'Controlled Sprint 9 pilot import '.$batch->uuid,
+                            'notes' => 'Controlled member import '.$batch->uuid,
                             'created_by' => $approver?->id,
                         ]);
                     }
@@ -183,7 +190,7 @@ final class PilotMemberImportService
                         'from_status_id' => null,
                         'to_status_id' => $status->id,
                         'reason_code' => 'pilot_import',
-                        'reason_notes' => 'Controlled Sprint 9 pilot import '.$batch->uuid,
+                        'reason_notes' => 'Controlled member import '.$batch->uuid,
                         'effective_at' => now(),
                         'actor_id' => $approver?->id,
                     ]);
@@ -245,7 +252,7 @@ final class PilotMemberImportService
 
         $header = $file->fgetcsv();
         if (! is_array($header)) {
-            throw ValidationException::withMessages(['source' => 'Pilot CSV has no header row.']);
+            throw ValidationException::withMessages(['source' => 'Member CSV has no header row.']);
         }
 
         $normalizedHeader = array_map(
@@ -256,7 +263,7 @@ final class PilotMemberImportService
 
         if ($normalizedHeader !== self::HEADER) {
             throw ValidationException::withMessages([
-                'source' => 'Pilot CSV header must exactly match the approved Sprint 9 template.',
+                'source' => 'CSV header must exactly match the ICGU member import template shown in the admin portal.',
             ]);
         }
 
@@ -283,7 +290,7 @@ final class PilotMemberImportService
         }
 
         if ($rows === []) {
-            throw ValidationException::withMessages(['source' => 'Pilot CSV contains no data rows.']);
+            throw ValidationException::withMessages(['source' => 'Member CSV contains no data rows.']);
         }
 
         return [$rows, basename($path)];
@@ -312,6 +319,7 @@ final class PilotMemberImportService
         $planCode = strtolower(trim($raw['plan_code']));
         $statusCode = strtoupper(trim($raw['status']));
         $email = strtolower(trim($raw['email']));
+        $jobSeeker = $this->booleanValue($raw['is_job_seeker']);
 
         $parsedRegistration = $this->registrationNumbers->parse($registration);
         if ($parsedRegistration === null) {
@@ -345,6 +353,9 @@ final class PilotMemberImportService
         if (filter_var($email, FILTER_VALIDATE_EMAIL) === false) {
             $issues[] = 'email is invalid.';
         }
+        if ($jobSeeker === null) {
+            $issues[] = 'is_job_seeker must be yes/no, true/false, or 1/0.';
+        }
 
         $registrationDate = $this->dateValue($raw['registration_date']);
         if ($registrationDate === null) {
@@ -372,7 +383,7 @@ final class PilotMemberImportService
 
                 $currentYear = (int) now()->year;
                 if ($targetYear === false || $targetYear < 1990 || $targetYear > $currentYear + 2) {
-                    $issues[] = 'target_year is outside the accepted pilot range.';
+                    $issues[] = 'target_year is outside the accepted import range.';
                 }
             }
         } elseif ($statusCode === 'ACTIVE') {
@@ -412,6 +423,8 @@ final class PilotMemberImportService
             'phone' => trim($raw['phone']) ?: null,
             'organization' => trim($raw['organization']) ?: null,
             'job_title' => trim($raw['job_title']) ?: null,
+            'membership_tier' => trim($raw['membership_tier']) ?: null,
+            'is_job_seeker' => $jobSeeker ?? false,
             'registration_date' => $registrationDate,
             'period_start' => $periodStart,
             'period_end' => $periodEnd,
@@ -442,6 +455,19 @@ final class PilotMemberImportService
         }
 
         return $date->format('Y-m-d') === $value ? $value : null;
+    }
+
+    private function booleanValue(string $value): ?bool
+    {
+        $value = strtolower(trim($value));
+        if (in_array($value, ['1', 'true', 'yes', 'y'], true)) {
+            return true;
+        }
+        if (in_array($value, ['0', 'false', 'no', 'n', ''], true)) {
+            return false;
+        }
+
+        return null;
     }
 
     private function advanceRegistrationSequence(string $registrationNumber): void
