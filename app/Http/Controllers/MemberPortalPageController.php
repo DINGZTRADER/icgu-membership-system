@@ -25,7 +25,13 @@ final class MemberPortalPageController extends Controller
 
     public function loginForm(Request $request): View|RedirectResponse
     {
-        if ($request->user()?->portalAccounts()->exists()) {
+        $user = $request->user();
+
+        if ($user?->hasStaffRole()) {
+            return redirect()->route($user->mfa_confirmed_at ? 'staff.dashboard' : 'staff.mfa.setup');
+        }
+
+        if ($user?->portalAccounts()->exists()) {
             return redirect()->route('member.dashboard');
         }
 
@@ -44,17 +50,38 @@ final class MemberPortalPageController extends Controller
             'password' => $validated['password'],
             'is_active' => true,
         ], true)) {
-            throw ValidationException::withMessages(['email' => 'The supplied member portal credentials are invalid.']);
+            throw ValidationException::withMessages(['email' => 'The supplied credentials are invalid.']);
         }
 
         $request->session()->regenerate();
         $user = $request->user();
 
+        if ($user->hasStaffRole()) {
+            $request->session()->forget('staff_mfa_verified_at');
+
+            if ($user->requiresStaffMfa() && $user->mfa_confirmed_at === null) {
+                return redirect()->route('staff.mfa.setup');
+            }
+
+            if ($user->requiresStaffMfa()) {
+                $userId = $user->id;
+                Auth::logout();
+                $request->session()->put('staff_mfa_pending_user_id', $userId);
+                $request->session()->put('staff_mfa_pending_remember', false);
+
+                return redirect()->route('staff.mfa.challenge');
+            }
+
+            $user->forceFill(['last_login_at' => now()])->save();
+
+            return redirect()->route('staff.dashboard');
+        }
+
         if (! $user->portalAccounts()->exists()) {
             Auth::logout();
             $request->session()->invalidate();
             $request->session()->regenerateToken();
-            throw ValidationException::withMessages(['email' => 'This account is not linked to an ICGU membership portal record.']);
+            throw ValidationException::withMessages(['email' => 'This account is not linked to an ICGU portal record.']);
         }
 
         $user->forceFill(['last_login_at' => now()])->save();
@@ -159,18 +186,19 @@ final class MemberPortalPageController extends Controller
         $this->portal->assertAccess($request->user(), $member, ['owner', 'representative']);
         $this->credentials->issue($member, $request->user());
 
-        return redirect()->route('member.membership', $member)->with('status', 'Your digital membership credential is ready.');
+        return back()->with('status', 'Your digital credential is ready.');
     }
 
     public function verifyCredential(string $verificationCode): View
     {
         $credential = MemberCredential::query()
             ->where('verification_code', $verificationCode)
-            ->with(['member.status', 'member.membershipPlan', 'member.organisation'])
-            ->firstOrFail();
+            ->with(['member.membershipPlan', 'member.status'])
+            ->first();
 
-        $valid = $credential->is_valid && $credential->member->status?->code === 'ACTIVE';
-
-        return view('member.verify', compact('credential', 'valid'));
+        return view('member.verify', [
+            'credential' => $credential,
+            'isValid' => $credential?->isValid() ?? false,
+        ]);
     }
 }
