@@ -2,8 +2,6 @@
 
 declare(strict_types=1);
 
-use Illuminate\Support\Str;
-
 return [
     'driver' => env('SESSION_DRIVER', 'database'),
     'lifetime' => (int) env('SESSION_LIFETIME', 120),
@@ -14,11 +12,16 @@ return [
     'table' => env('SESSION_TABLE', 'sessions'),
     'store' => env('SESSION_STORE'),
     'lottery' => [2, 100],
-    'cookie' => env('SESSION_COOKIE', Str::slug((string) env('APP_NAME', 'icgu'), '_').'_session'),
-    'path' => env('SESSION_PATH', '/'),
-    'domain' => env('SESSION_DOMAIN'),
-    'secure' => env('SESSION_SECURE_COOKIE', true),
-    'http_only' => env('SESSION_HTTP_ONLY', true),
-    'same_site' => env('SESSION_SAME_SITE', 'lax'),
-    'partitioned' => (bool) env('SESSION_PARTITIONED_COOKIE', false),
+    // Use a dedicated cookie name for this application so stale cookies from
+    // earlier pilot deployments cannot be mistaken for the current session.
+    'cookie' => env('SESSION_COOKIE', 'icgu_portal_session'),
+    'path' => '/',
+    // Keep the session cookie host-only. This works consistently on both the
+    // Laravel Cloud hostname and any attached custom domain and avoids a stale
+    // SESSION_DOMAIN causing the browser to reject the cookie.
+    'domain' => null,
+    'secure' => true,
+    'http_only' => true,
+    'same_site' => 'lax',
+    'partitioned' => false,
 ];
