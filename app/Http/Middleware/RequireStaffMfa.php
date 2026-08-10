@@ -16,6 +16,11 @@ final class RequireStaffMfa
         $user = $request->user();
         abort_unless($user !== null && $user->hasStaffRole(), 403);
 
+        // A verified Google Workspace sign-in is accepted as the staff authentication factor.
+        if ($request->session()->has('staff_google_authenticated_at')) {
+            return $next($request);
+        }
+
         if (! $user->requiresStaffMfa()) {
             return $next($request);
         }
