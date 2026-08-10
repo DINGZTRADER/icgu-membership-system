@@ -43,8 +43,8 @@ final class VerifySprint9 extends Command
             $approver->roles()->attach($role->id);
 
             $csv = implode(',', PilotMemberImportService::HEADER)."\n"
-                .'ICGU/997/2026,individual,student,ACTIVE,Pilot,Individual,,sprint9.individual@prototype.invalid,+256772000091,Makerere University,Student,2026-08-01,2026-01-01,2026-12-31,2026'."\n"
-                .'ICGU/998/2026,corporate,sme-corporate,ACTIVE,,,Pilot Governance Ltd,sprint9.corporate@prototype.invalid,+256772000092,,Company Secretary,2026-08-01,2026-01-01,2026-12-31,2026'."\n";
+                .'ICGU/997/2026,individual,student,ACTIVE,Pilot,Individual,,sprint9.individual@prototype.invalid,+256772000091,Makerere University,Student,Student,false,2026-08-01,2026-01-01,2026-12-31,2026'."\n"
+                .'ICGU/998/2026,corporate,sme-corporate,ACTIVE,,,Pilot Governance Ltd,sprint9.corporate@prototype.invalid,+256772000092,,Company Secretary,SME,false,2026-08-01,2026-01-01,2026-12-31,2026'."\n";
             file_put_contents($path, $csv);
 
             $dryRun = $imports->import($path);
