@@ -78,8 +78,8 @@ final class VerifySprint6 extends Command
             }
 
             $login = view('member.login')->render();
-            if (! str_contains($login, 'Sign in to Member Portal') || ! str_contains($login, 'name="_token"')) {
-                throw new \RuntimeException('Login page is missing the portal form or CSRF field.');
+            if (! str_contains($login, 'Sign in to ICGU') || ! str_contains($login, 'name="_token"')) {
+                throw new \RuntimeException('Login page is missing the unified ICGU sign-in form or CSRF field.');
             }
 
             $this->info('Sprint 6 branded member portal UI verified successfully.');
