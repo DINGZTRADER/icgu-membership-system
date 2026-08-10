@@ -43,6 +43,12 @@ final class ProductionReadinessCheck extends Command
         $this->check((bool) config('session.secure') === true, 'Secure cookies', 'SESSION_SECURE_COOKIE must be true.', true);
         $this->check((bool) config('session.http_only') === true, 'HTTP-only cookies', 'SESSION_HTTP_ONLY must be true.', true);
         $this->check(in_array(config('session.same_site'), ['lax', 'strict'], true), 'SameSite cookies', 'SESSION_SAME_SITE must be lax or strict.', true);
+        $this->check(
+            (bool) config('production.require_staff_mfa', false),
+            'Staff MFA policy',
+            'STAFF_MFA_REQUIRED is disabled for the controlled pilot; enable it before full production go-live.',
+            $strict,
+        );
 
         $this->check(config('queue.default') !== 'sync', 'Durable queue', 'QUEUE_CONNECTION must not be sync in production.', $strict);
         $this->check(! in_array(config('cache.default'), ['array', 'null'], true), 'Shared cache', 'CACHE_STORE must be a persistent shared store.', $strict);
