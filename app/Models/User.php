@@ -67,6 +67,6 @@ final class User extends Authenticatable
 
     public function requiresStaffMfa(): bool
     {
-        return $this->hasStaffRole();
+        return $this->hasStaffRole() && (bool) config('production.require_staff_mfa', false);
     }
 }
