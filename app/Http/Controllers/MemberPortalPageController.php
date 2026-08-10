@@ -28,7 +28,11 @@ final class MemberPortalPageController extends Controller
         $user = $request->user();
 
         if ($user?->hasStaffRole()) {
-            return redirect()->route($user->mfa_confirmed_at ? 'staff.dashboard' : 'staff.mfa.setup');
+            if ($user->requiresStaffMfa() && $user->mfa_confirmed_at === null) {
+                return redirect()->route('staff.mfa.setup');
+            }
+
+            return redirect()->route('staff.dashboard');
         }
 
         if ($user?->portalAccounts()->exists()) {
