@@ -23,6 +23,7 @@ class Member extends Model
     protected $casts = [
         'registration_date' => 'immutable_date',
         'is_archived' => 'boolean',
+        'is_job_seeker' => 'boolean',
     ];
 
     public function status(): BelongsTo { return $this->belongsTo(LookupStatus::class, 'status_id'); }
