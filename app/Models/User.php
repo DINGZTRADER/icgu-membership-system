@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Illuminate\Support\Str;
 
 final class User extends Authenticatable
 {
@@ -71,6 +72,32 @@ final class User extends Authenticatable
     public function requiresStaffMfa(): bool
     {
         return $this->hasStaffRole() && (bool) config('production.require_staff_mfa', false);
+    }
+
+    /**
+     * A staff account is pilot-authentication-ready when it is active and can
+     * satisfy the production authentication policy through either enrolled
+     * TOTP MFA or the configured, domain-restricted Google Workspace flow.
+     */
+    public function hasReadyStaffAuthenticator(): bool
+    {
+        if (! $this->is_active || ! $this->hasStaffRole()) {
+            return false;
+        }
+
+        if ($this->mfa_confirmed_at !== null) {
+            return true;
+        }
+
+        $clientId = trim((string) config('services.google.client_id'));
+        $clientSecret = trim((string) config('services.google.client_secret'));
+        $hostedDomain = mb_strtolower(trim((string) config('services.google.hosted_domain')));
+
+        if ($clientId === '' || $clientSecret === '' || $hostedDomain === '') {
+            return false;
+        }
+
+        return Str::endsWith(mb_strtolower(trim($this->email)), '@'.$hostedDomain);
     }
 
     /**
