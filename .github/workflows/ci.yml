@@ -1,4 +1,4 @@
-name: Sprint 10 Release Verification
+name: Sprint 11 Production Cutover Verification
 
 on:
   pull_request:
@@ -43,6 +43,7 @@ jobs:
       CACHE_STORE: array
       QUEUE_CONNECTION: sync
       LOG_CHANNEL: stderr
+      FILESYSTEM_DISK: local
       MEMBERSHIP_DOCUMENT_DISK: local
       MTN_MOMO_ENABLED: false
       PRODUCTION_REQUIRE_LIVE_MAIL: false
@@ -65,6 +66,9 @@ jobs:
 
       - name: Install locked dependencies
         run: composer install --no-interaction --prefer-dist --no-progress
+
+      - name: Verify production storage dependency
+        run: composer show league/flysystem-aws-s3-v3 --locked
 
       - name: Generate ephemeral test encryption key
         run: php artisan key:generate --force
@@ -115,7 +119,7 @@ jobs:
           php artisan list | grep -q 'icgu:pilot-import'
           php artisan list | grep -q 'icgu:pilot-check'
 
-      - name: Verify Sprint 10 release controls and retained schema
+      - name: Verify Sprint 11 production controls and retained schema
         env:
           PGPASSWORD: postgres
         run: |
@@ -134,9 +138,15 @@ jobs:
           grep -q 'member.billing.mtn-momo' routes/web.php
           grep -q 'mtn-momo/callback' routes/api.php
           grep -q 'PILOT_IMPORT_MAX_ROWS' .env.example
+          grep -q 'STAFF_MFA_REQUIRED=true' .env.example
           grep -q 'GOOGLE_CLIENT_ID' .env.example
           grep -q 'GOOGLE_CLIENT_SECRET' .env.example
           grep -q 'GOOGLE_HOSTED_DOMAIN=icgu.org' .env.example
+          grep -q 'FILESYSTEM_DISK=s3' .env.example
+          grep -q 'MEMBERSHIP_DOCUMENT_DISK=s3' .env.example
+          grep -q 'AWS_ENDPOINT=' .env.example
+          grep -q "'driver' => 's3'" config/filesystems.php
+          grep -q 'flysystem-aws-s3-v3' composer.json
           grep -Fq 'Auth::login($user, false);' app/Http/Controllers/GoogleStaffAuthController.php
           if grep -Fq "staff_mfa_pending_remember', true" app/Http/Middleware/RequireStaffMfa.php; then
             echo 'Persistent staff remember-me fallback detected.'
