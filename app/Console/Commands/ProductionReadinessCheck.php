@@ -25,6 +25,16 @@ final class ProductionReadinessCheck extends Command
         $this->check(Str::startsWith((string) config('app.url'), 'https://'), 'Application URL', 'APP_URL must use HTTPS.', $strict);
         $this->check(trim((string) config('app.key')) !== '', 'Application key', 'APP_KEY must be configured.', true);
 
+        $googleClientId = trim((string) config('services.google.client_id'));
+        $googleClientSecret = trim((string) config('services.google.client_secret'));
+        $googleRedirect = trim((string) config('services.google.redirect'));
+        $googleHostedDomain = mb_strtolower(trim((string) config('services.google.hosted_domain')));
+        $this->check($googleClientId !== '', 'Google Workspace client ID', 'GOOGLE_CLIENT_ID is required for Secretariat sign-in.', $strict);
+        $this->check($googleClientSecret !== '', 'Google Workspace client secret', 'GOOGLE_CLIENT_SECRET is required for Secretariat sign-in.', $strict);
+        $this->check($googleHostedDomain === 'icgu.org', 'Google Workspace hosted domain', 'GOOGLE_HOSTED_DOMAIN must be icgu.org.', true);
+        $this->check(Str::startsWith($googleRedirect, 'https://'), 'Google OAuth callback HTTPS', 'GOOGLE_REDIRECT_URI must use HTTPS in production.', $strict);
+        $this->check(Str::endsWith($googleRedirect, '/auth/google/staff/callback'), 'Google OAuth callback path', 'GOOGLE_REDIRECT_URI must end with /auth/google/staff/callback.', $strict);
+
         $this->check(config('database.default') === 'pgsql', 'Database driver', 'Production database must use PostgreSQL.', true);
         $this->check(config('database.connections.pgsql.search_path') === 'icgu', 'Private database schema', 'DB_SCHEMA must be icgu.', true);
         $this->check(config('database.connections.pgsql.sslmode') === 'require', 'Database TLS', 'DB_SSLMODE must be require.', $strict);
@@ -46,7 +56,7 @@ final class ProductionReadinessCheck extends Command
         $this->check(
             (bool) config('production.require_staff_mfa', false),
             'Staff MFA policy',
-            'STAFF_MFA_REQUIRED is disabled for the controlled pilot; enable it before full production go-live.',
+            'STAFF_MFA_REQUIRED must be enabled for the production pilot.',
             $strict,
         );
 
@@ -73,8 +83,20 @@ final class ProductionReadinessCheck extends Command
         );
 
         if ($diskExists) {
+            $diskConfig = (array) ($configuredDisks[$documentDisk] ?? []);
+            $driver = (string) ($diskConfig['driver'] ?? '');
+
             if ($documentDisk === 'local' && ! (bool) config('production.allow_local_document_storage', false)) {
-                $this->check(false, 'Membership document durability', 'Local document storage is disabled by production policy; configure persistent/object storage or explicitly accept a persistent local volume.', $strict);
+                $this->check(false, 'Membership document durability', 'Laravel Cloud local filesystems are ephemeral; attach private object storage and set MEMBERSHIP_DOCUMENT_DISK=s3.', $strict);
+            } elseif ($driver === 's3') {
+                $this->check(class_exists(\League\Flysystem\AwsS3V3\AwsS3V3Adapter::class), 'S3 filesystem adapter', 'Install league/flysystem-aws-s3-v3 before using Laravel Cloud Object Storage.', true);
+                $this->check(trim((string) ($diskConfig['key'] ?? '')) !== '', 'Object storage access key', 'AWS_ACCESS_KEY_ID is required for the attached private bucket.', $strict);
+                $this->check(trim((string) ($diskConfig['secret'] ?? '')) !== '', 'Object storage secret key', 'AWS_SECRET_ACCESS_KEY is required for the attached private bucket.', $strict);
+                $this->check(trim((string) ($diskConfig['bucket'] ?? '')) !== '', 'Object storage bucket', 'AWS_BUCKET is required for the attached private bucket.', $strict);
+                $endpoint = trim((string) ($diskConfig['endpoint'] ?? ''));
+                $this->check($endpoint !== '', 'Object storage endpoint', 'AWS_ENDPOINT is required for Laravel Cloud Object Storage.', $strict);
+                $this->check($endpoint === '' || Str::startsWith($endpoint, 'https://'), 'Object storage endpoint HTTPS', 'AWS_ENDPOINT must use HTTPS.', $strict);
+                $this->passResult('Membership document durability', 'S3-compatible private object storage is configured.');
             } else {
                 $this->passResult('Membership document durability', 'Document storage policy is explicitly configured.');
             }

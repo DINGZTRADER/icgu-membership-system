@@ -17,6 +17,7 @@ final class ProvisionStaffUser extends Command
         {email : Staff email address}
         {role : Staff role slug}
         {--name= : Staff display name}
+        {--google-only : Disable password sign-in by assigning an inaccessible random local password; requires the configured Google Workspace domain}
         {--reset-password : Replace the password for an existing account}
         {--password-env= : Environment variable containing the initial/reset password for non-interactive provisioning}';
 
@@ -32,6 +33,7 @@ final class ProvisionStaffUser extends Command
         $email = mb_strtolower(trim((string) $this->argument('email')));
         $roleSlug = trim((string) $this->argument('role'));
         $allowed = ['super-admin', 'ceo', 'membership-officer', 'finance-officer', 'training-officer', 'auditor'];
+        $googleOnly = (bool) $this->option('google-only');
 
         if (! filter_var($email, FILTER_VALIDATE_EMAIL)) {
             $this->error('A valid staff email address is required.');
@@ -40,6 +42,23 @@ final class ProvisionStaffUser extends Command
         if (! in_array($roleSlug, $allowed, true)) {
             $this->error('Role must be one of: '.implode(', ', $allowed));
             return self::FAILURE;
+        }
+        if ($googleOnly && (bool) $this->option('reset-password')) {
+            $this->error('--google-only already replaces the local password and cannot be combined with --reset-password.');
+            return self::FAILURE;
+        }
+        if ($googleOnly && trim((string) $this->option('password-env')) !== '') {
+            $this->error('--google-only cannot be combined with --password-env.');
+            return self::FAILURE;
+        }
+
+        if ($googleOnly) {
+            $workspaceDomain = mb_strtolower(trim((string) config('services.google.hosted_domain', 'icgu.org')));
+            $emailDomain = mb_strtolower(trim((string) Str::afterLast($email, '@')));
+            if ($workspaceDomain === '' || $emailDomain !== $workspaceDomain) {
+                $this->error("--google-only requires an email in the configured Google Workspace domain ({$workspaceDomain}).");
+                return self::FAILURE;
+            }
         }
 
         $role = Role::query()->where('slug', $roleSlug)->firstOrFail();
@@ -58,40 +77,46 @@ final class ProvisionStaffUser extends Command
             return self::FAILURE;
         }
 
-        $needsPassword = $user === null || (bool) $this->option('reset-password');
+        $needsPassword = $user === null || (bool) $this->option('reset-password') || $googleOnly;
         $password = null;
         if ($needsPassword) {
-            $passwordEnv = trim((string) $this->option('password-env'));
-
-            if ($passwordEnv !== '') {
-                if (! preg_match('/\A[A-Z][A-Z0-9_]{2,80}\z/', $passwordEnv)) {
-                    $this->error('Password environment variable name must use uppercase letters, numbers, and underscores only.');
-                    return self::FAILURE;
-                }
-
-                $environmentPassword = getenv($passwordEnv);
-                if ($environmentPassword === false || $environmentPassword === '') {
-                    $this->error("Environment variable {$passwordEnv} is not set or is empty.");
-                    return self::FAILURE;
-                }
-
-                $password = (string) $environmentPassword;
+            if ($googleOnly) {
+                // The value is never displayed or persisted outside the one-way password hash.
+                // This disables the legacy password path for Google-only Secretariat accounts.
+                $password = Str::random(64);
             } else {
-                if (! $this->input->isInteractive()) {
-                    $this->error('A password source is required in non-interactive environments. Set a temporary secret environment variable and pass --password-env=VARIABLE_NAME.');
-                    return self::FAILURE;
+                $passwordEnv = trim((string) $this->option('password-env'));
+
+                if ($passwordEnv !== '') {
+                    if (! preg_match('/\A[A-Z][A-Z0-9_]{2,80}\z/', $passwordEnv)) {
+                        $this->error('Password environment variable name must use uppercase letters, numbers, and underscores only.');
+                        return self::FAILURE;
+                    }
+
+                    $environmentPassword = getenv($passwordEnv);
+                    if ($environmentPassword === false || $environmentPassword === '') {
+                        $this->error("Environment variable {$passwordEnv} is not set or is empty.");
+                        return self::FAILURE;
+                    }
+
+                    $password = (string) $environmentPassword;
+                } else {
+                    if (! $this->input->isInteractive()) {
+                        $this->error('A password source is required in non-interactive environments. Set a temporary secret environment variable and pass --password-env=VARIABLE_NAME, or use --google-only for an ICGU Workspace account.');
+                        return self::FAILURE;
+                    }
+
+                    $password = (string) $this->secret('Password (minimum 12 characters)');
+                    if ($password !== (string) $this->secret('Confirm password')) {
+                        $this->error('Passwords do not match.');
+                        return self::FAILURE;
+                    }
                 }
 
-                $password = (string) $this->secret('Password (minimum 12 characters)');
-                if ($password !== (string) $this->secret('Confirm password')) {
-                    $this->error('Passwords do not match.');
+                if (mb_strlen($password) < 12 || Str::contains(mb_strtolower($password), mb_strtolower(Str::before($email, '@')))) {
+                    $this->error('Password must be at least 12 characters and must not contain the email username.');
                     return self::FAILURE;
                 }
-            }
-
-            if (mb_strlen($password) < 12 || Str::contains(mb_strtolower($password), mb_strtolower(Str::before($email, '@')))) {
-                $this->error('Password must be at least 12 characters and must not contain the email username.');
-                return self::FAILURE;
             }
         }
 
@@ -111,9 +136,11 @@ final class ProvisionStaffUser extends Command
             'email' => $user->email,
             'role' => $roleSlug,
             'password_reset' => $password !== null,
+            'google_only' => $googleOnly,
         ]);
 
-        $this->info("Staff account ready: {$email} ({$roleSlug}).");
+        $mode = $googleOnly ? 'Google Workspace only' : 'password-capable';
+        $this->info("Staff account ready: {$email} ({$roleSlug}, {$mode}).");
         return self::SUCCESS;
     }
 }
