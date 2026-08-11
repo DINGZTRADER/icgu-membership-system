@@ -1,7 +1,9 @@
-name: Sprint 9 Verification
+name: Sprint 10 Release Verification
 
 on:
   pull_request:
+    branches: [main]
+  push:
     branches: [main]
   workflow_dispatch:
 
@@ -105,6 +107,7 @@ jobs:
           php artisan icgu:reconcile-mobile-money --limit=1
           php artisan route:list --path=api/membership
           php artisan route:list --path=api/integrations/mtn-momo
+          php artisan route:list --path=auth/google/staff
           php artisan route:list --path=member
           php artisan route:list --path=membership/verify
           php artisan route:list --path=staff
@@ -112,7 +115,7 @@ jobs:
           php artisan list | grep -q 'icgu:pilot-import'
           php artisan list | grep -q 'icgu:pilot-check'
 
-      - name: Verify Sprint 9 schema, assets and retained controls
+      - name: Verify Sprint 10 release controls and retained schema
         env:
           PGPASSWORD: postgres
         run: |
@@ -127,9 +130,18 @@ jobs:
           grep -q '@media(max-width:760px)' public/css/staff-admin.css
           grep -q '@media print' public/css/staff-admin.css
           grep -q 'staff.mfa' routes/web.php
+          grep -q 'staff.google.redirect' routes/web.php
           grep -q 'member.billing.mtn-momo' routes/web.php
           grep -q 'mtn-momo/callback' routes/api.php
           grep -q 'PILOT_IMPORT_MAX_ROWS' .env.example
+          grep -q 'GOOGLE_CLIENT_ID' .env.example
+          grep -q 'GOOGLE_CLIENT_SECRET' .env.example
+          grep -q 'GOOGLE_HOSTED_DOMAIN=icgu.org' .env.example
+          grep -Fq 'Auth::login($user, false);' app/Http/Controllers/GoogleStaffAuthController.php
+          if grep -Fq "staff_mfa_pending_remember', true" app/Http/Middleware/RequireStaffMfa.php; then
+            echo 'Persistent staff remember-me fallback detected.'
+            exit 1
+          fi
           grep -q 'id="mfa-qr"' resources/views/staff/mfa-setup.blade.php
           grep -q 'qrcodejs/1.0.0/qrcode.min.js' resources/views/staff/mfa-setup.blade.php
           grep -q 'sha512-CNgIRecGo7nphbeZ04Sc13ka07paqdeTu0WR1IM4kNcpmBAUSHSQX0FslNhTDadL4O5SAGapGt4FodqL8My0mA==' resources/views/staff/mfa-setup.blade.php

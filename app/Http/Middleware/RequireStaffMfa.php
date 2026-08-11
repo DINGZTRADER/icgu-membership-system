@@ -31,7 +31,9 @@ final class RequireStaffMfa
 
         if (! $request->session()->has('staff_mfa_verified_at')) {
             $request->session()->put('staff_mfa_pending_user_id', $user->id);
-            $request->session()->put('staff_mfa_pending_remember', true);
+            // Staff authentication must remain non-persistent even when a session
+            // reaches this middleware without its MFA verification marker.
+            $request->session()->put('staff_mfa_pending_remember', false);
             Auth::logout();
 
             return redirect()->route('staff.mfa.challenge');
