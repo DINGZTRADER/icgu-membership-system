@@ -49,6 +49,16 @@ STAFF_MFA_REQUIRED=true
 
 The callback URL registered in Google Cloud must exactly match `GOOGLE_REDIRECT_URI`. Google sign-in maps only to an existing active ICGU staff account; it must not auto-create Secretariat users.
 
+For staff who should authenticate only through ICGU Google Workspace, provision them from Laravel Cloud without creating or transmitting a usable password:
+
+```bash
+php artisan icgu:staff-user <staff@icgu.org> <role> \
+  --name="<Full Name>" \
+  --google-only
+```
+
+`--google-only` is restricted to the configured Workspace domain, assigns an inaccessible random local password, keeps the account active for Google authentication, and records the provisioning action in the audit log. Provision at least one active `ceo`, `membership-officer`, and `finance-officer` account before pilot sign-off.
+
 ## 3. Prepare the pilot member file
 
 Use `docs/pilot-members-template.csv`.
