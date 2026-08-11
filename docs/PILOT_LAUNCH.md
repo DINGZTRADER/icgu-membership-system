@@ -2,24 +2,54 @@
 
 ## Objective
 
-Sprint 9 moves the platform from code-ready to **pilot-ready** without placing real member data, credentials or payment secrets in Git.
+The platform is **pilot-ready** only after the application, production infrastructure and controlled member data all pass the release gates below. Real member data, credentials and payment secrets must never be committed to Git.
 
-The pilot is intentionally small. The default import cap is 50 member records per approved source file.
+The initial pilot remains deliberately small. The default import cap is 50 member records per approved source file.
 
 ## 1. Production infrastructure gate
 
 Before a real pilot, ICGU must have dedicated production infrastructure:
 
 - Laravel Cloud production environment connected to `main`;
-- dedicated ICGU Supabase PostgreSQL project;
-- private persistent object storage for membership documents and pilot import files;
+- dedicated ICGU Supabase PostgreSQL project using the private `icgu` schema;
+- private Laravel Cloud Object Storage bucket for membership documents and pilot import files;
 - live ICGU SMTP credentials;
-- real Secretariat accounts with MFA;
+- Google Workspace OAuth client restricted to the `icgu.org` staff domain;
+- real Secretariat accounts with staff roles and MFA policy enabled;
 - MTN Uganda production credentials only after sandbox/UAT is approved.
 
-Do not reuse another client's Supabase project.
+Do not reuse another client's Supabase project or object-storage bucket.
 
-## 2. Prepare the pilot member file
+### Laravel Cloud private object storage
+
+The Laravel Cloud application filesystem is ephemeral and must not hold member documents. In the production environment:
+
+1. Add a **Laravel Object Storage** bucket from the environment infrastructure canvas.
+2. Make the bucket **private**.
+3. Use disk name `s3` and attach it to the production environment.
+4. Re-deploy so Laravel Cloud injects `FILESYSTEM_DISK` and the AWS-compatible bucket credentials.
+5. Confirm `MEMBERSHIP_DOCUMENT_DISK=s3`.
+6. Run `php artisan icgu:production-check --strict`; the storage checks must pass.
+
+The repository includes `league/flysystem-aws-s3-v3` and an `s3` filesystem disk for this purpose.
+
+## 2. Google Workspace staff sign-in
+
+Create a Google Cloud OAuth 2.0 **Web Application** client for the production membership platform.
+
+Configure:
+
+```text
+GOOGLE_CLIENT_ID=<secret>
+GOOGLE_CLIENT_SECRET=<secret>
+GOOGLE_REDIRECT_URI=https://<production-domain>/auth/google/staff/callback
+GOOGLE_HOSTED_DOMAIN=icgu.org
+STAFF_MFA_REQUIRED=true
+```
+
+The callback URL registered in Google Cloud must exactly match `GOOGLE_REDIRECT_URI`. Google sign-in maps only to an existing active ICGU staff account; it must not auto-create Secretariat users.
+
+## 3. Prepare the pilot member file
 
 Use `docs/pilot-members-template.csv`.
 
@@ -37,29 +67,29 @@ Required rules:
 - ACTIVE members require `period_start`, `period_end`, and `target_year`;
 - a registration number or member email already present in the database is a conflict, never an update.
 
-Financial history is not bulk-imported by Sprint 9. Finance should reconcile opening balances separately under an approved accounting migration procedure.
+Financial history is not bulk-imported. Finance should reconcile opening balances separately under an approved accounting migration procedure.
 
-## 3. Keep PII out of Git
+## 4. Keep PII out of Git
 
-Upload the approved CSV to the configured private object-storage disk. Never commit a real pilot CSV to the repository.
+Upload the approved CSV to the private `s3` disk. Never commit a real pilot CSV to the repository.
 
 Dry run:
 
 ```bash
-php artisan icgu:pilot-import pilot/icgu-pilot-001.csv --disk=<private-disk>
+php artisan icgu:pilot-import pilot/icgu-pilot-001.csv --disk=s3
 ```
 
-A dry run writes only the import audit batch/row diagnostics. It does **not** create members.
+A dry run writes only import audit batch/row diagnostics. It does **not** create members.
 
 If the command reports any conflict or error, correct the source and run another dry run.
 
-## 4. Commit the approved batch
+## 5. Commit the approved batch
 
 After ICGU approves the validated source:
 
 ```bash
 php artisan icgu:pilot-import pilot/icgu-pilot-001.csv \
-  --disk=<private-disk> \
+  --disk=s3 \
   --commit \
   --approved-by=<active-secretariat-email>
 ```
@@ -79,7 +109,7 @@ The importer:
 
 After successful import, retain the source according to ICGU's approved records policy or securely delete it from the staging location.
 
-## 5. Pilot readiness gates
+## 6. Pilot readiness gates
 
 Run:
 
@@ -87,6 +117,8 @@ Run:
 php artisan icgu:production-check --strict
 php artisan icgu:pilot-check --strict
 ```
+
+`production-check --strict` validates the production environment, including HTTPS, APP_KEY, Google Workspace OAuth, PostgreSQL/TLS/private schema, secure sessions, MFA policy, durable queue/cache, live mail and private object storage.
 
 `pilot-check --strict` blocks launch when it detects critical data or operational conditions including:
 
@@ -99,7 +131,7 @@ php artisan icgu:pilot-check --strict
 
 Historical dry-run/failed batch records remain visible for audit and should be reviewed, but corrected historical attempts do not by themselves block launch.
 
-## 6. Laravel Cloud deployment
+## 7. Laravel Cloud deployment
 
 Use production build/deploy separation.
 
@@ -117,26 +149,28 @@ php artisan migrate --force
 php artisan icgu:production-check --strict
 ```
 
-Enable the Laravel Cloud scheduler and queue worker/worker cluster. Keep `onOneServer()` for singleton scheduled tasks.
+Enable the Laravel Cloud scheduler and a queue worker/worker cluster. Keep `onOneServer()` for singleton scheduled tasks.
 
-## 7. UAT sequence
+## 8. UAT sequence
 
 Use a controlled cohort and execute in this order:
 
-1. Secretariat login + MFA for CEO, Membership and Finance roles.
-2. Dry-run and commit the approved pilot member file.
-3. Run `icgu:pilot-check --strict`.
-4. Verify member search, profile, status, plan and current membership period.
-5. Create one controlled application and approve it through the normal workflow.
-6. Generate invoice, record one approved manual payment, verify receipt.
-7. Verify member portal invitation/login and digital credential verification.
-8. Exercise renewal generation and reminder dry-run.
-9. Complete MTN sandbox/UAT before enabling production credentials.
-10. Confirm `/up`, queue processing, scheduler execution and error monitoring.
-11. Export an independent database backup and verify the object-storage backup process.
-12. Record ICGU pilot sign-off before expanding the cohort.
+1. Confirm the `main` branch release verification is green.
+2. Confirm `/up` returns healthy on the production domain.
+3. Test Google Workspace Secretariat sign-in for CEO, Membership and Finance roles.
+4. Dry-run and commit the approved pilot member file from private object storage.
+5. Run `icgu:pilot-check --strict`.
+6. Verify member search, profile, status, plan and current membership period.
+7. Create one controlled application and approve it through the normal workflow.
+8. Generate invoice, record one approved manual payment, verify receipt.
+9. Verify member portal invitation/login and digital credential verification.
+10. Exercise renewal generation and reminder dry-run.
+11. Complete MTN sandbox/UAT before enabling production credentials.
+12. Confirm queue processing, scheduler execution and error monitoring.
+13. Export an independent database backup and verify the object-storage backup process.
+14. Record ICGU pilot sign-off before expanding the cohort.
 
-## 8. Rollback
+## 9. Rollback
 
 Application rollback and data rollback are separate decisions.
 
@@ -145,11 +179,12 @@ Application rollback and data rollback are separate decisions.
 - Financial correction: use append-only reversal/refund/waiver mechanisms.
 - Database disaster recovery: use the approved Supabase backup/PITR procedure only after assessing potential data loss.
 
-## Current platform references checked for Sprint 9
+## Platform references
 
 - Laravel 12 deployment: https://laravel.com/docs/12.x/deployment
 - Laravel Cloud deployments: https://cloud.laravel.com/docs/deployments
 - Laravel Cloud environments: https://cloud.laravel.com/docs/environments
+- Laravel Cloud Object Storage: https://cloud.laravel.com/docs/resources/object-storage
 - Laravel Cloud scheduled tasks: https://cloud.laravel.com/docs/scheduled-tasks
 - Supabase production checklist: https://supabase.com/docs/guides/deployment/going-into-prod
 - Supabase backups: https://supabase.com/docs/guides/platform/backups
