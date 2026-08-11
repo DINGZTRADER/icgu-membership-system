@@ -130,7 +130,9 @@ final class GoogleStaffAuthController extends Controller
             ]);
         }
 
-        Auth::login($user, true);
+        // Staff sessions are deliberately non-persistent. Google Workspace verifies
+        // identity for this session but must never create a Laravel remember-me cookie.
+        Auth::login($user, false);
         $request->session()->regenerate();
         $request->session()->forget([
             'staff_mfa_verified_at',
