@@ -1,4 +1,4 @@
-name: Sprint 11 Production Cutover Verification
+name: Sprint 12 Pilot Authentication Readiness Verification
 
 on:
   pull_request:
@@ -116,6 +116,7 @@ jobs:
           php artisan icgu:verify-sprint8
           php artisan icgu:verify-sprint8-payment-race
           php artisan icgu:verify-sprint9
+          php artisan icgu:verify-sprint12
           php artisan icgu:reconcile-mobile-money --limit=1
           php artisan route:list --path=api/membership
           php artisan route:list --path=api/integrations/mtn-momo
@@ -126,8 +127,9 @@ jobs:
           php artisan schedule:list
           php artisan list | grep -q 'icgu:pilot-import'
           php artisan list | grep -q 'icgu:pilot-check'
+          php artisan list | grep -q 'icgu:verify-sprint12'
 
-      - name: Verify Sprint 11 production controls and retained schema
+      - name: Verify Sprint 12 production controls and retained schema
         env:
           PGPASSWORD: postgres
         run: |
@@ -158,6 +160,9 @@ jobs:
           grep -q "'driver' => 's3'" config/filesystems.php
           grep -q 'flysystem-aws-s3-v3' composer.json
           grep -q -- '--google-only' app/Console/Commands/ProvisionStaffUser.php
+          grep -q 'hasReadyStaffAuthenticator' app/Models/User.php
+          grep -q 'Staff authentication:' app/Console/Commands/PilotReadinessCheck.php
+          test -s app/Console/Commands/VerifySprint12.php
           grep -Fq 'Auth::login($user, false);' app/Http/Controllers/GoogleStaffAuthController.php
           if grep -Fq "staff_mfa_pending_remember', true" app/Http/Middleware/RequireStaffMfa.php; then
             echo 'Persistent staff remember-me fallback detected.'
