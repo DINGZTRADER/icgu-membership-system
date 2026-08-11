@@ -95,6 +95,14 @@ jobs:
       - name: Seed RBAC
         run: php artisan db:seed --class='Database\Seeders\RbacSeeder' --force
 
+      - name: Verify Google-only staff provisioning
+        run: |
+          php artisan icgu:staff-user sprint11.google@icgu.org ceo --name="Sprint 11 Google Staff" --google-only
+          if php artisan icgu:staff-user sprint11.google@example.com ceo --name="Invalid Google Staff" --google-only; then
+            echo 'Google-only provisioning unexpectedly accepted a non-ICGU domain.'
+            exit 1
+          fi
+
       - name: Verify membership lifecycle and pilot migration domains
         run: |
           php artisan icgu:health
@@ -126,6 +134,7 @@ jobs:
           test "$(psql -At -h 127.0.0.1 -U postgres -d icgu_test -c 'select count(*) from icgu.roles')" -eq 7
           test "$(psql -At -h 127.0.0.1 -U postgres -d icgu_test -c 'select count(*) from icgu.permissions')" -eq 21
           test "$(psql -At -h 127.0.0.1 -U postgres -d icgu_test -c 'select count(*) from icgu.membership_plans')" -eq 5
+          test "$(psql -At -h 127.0.0.1 -U postgres -d icgu_test -c \"select count(*) from icgu.users u join icgu.role_user ru on ru.user_id=u.id join icgu.roles r on r.id=ru.role_id where lower(u.email)='sprint11.google@icgu.org' and u.is_active and r.slug='ceo'\")" -eq 1
           test -s public/css/member-portal.css
           test -s public/css/staff-admin.css
           test -s docs/PILOT_LAUNCH.md
@@ -147,6 +156,7 @@ jobs:
           grep -q 'AWS_ENDPOINT=' .env.example
           grep -q "'driver' => 's3'" config/filesystems.php
           grep -q 'flysystem-aws-s3-v3' composer.json
+          grep -q -- '--google-only' app/Console/Commands/ProvisionStaffUser.php
           grep -Fq 'Auth::login($user, false);' app/Http/Controllers/GoogleStaffAuthController.php
           if grep -Fq "staff_mfa_pending_remember', true" app/Http/Middleware/RequireStaffMfa.php; then
             echo 'Persistent staff remember-me fallback detected.'
@@ -156,11 +166,11 @@ jobs:
           grep -q 'qrcodejs/1.0.0/qrcode.min.js' resources/views/staff/mfa-setup.blade.php
           grep -q 'sha512-CNgIRecGo7nphbeZ04Sc13ka07paqdeTu0WR1IM4kNcpmBAUSHSQX0FslNhTDadL4O5SAGapGt4FodqL8My0mA==' resources/views/staff/mfa-setup.blade.php
           grep -q 'provisioningUri = @json' resources/views/staff/mfa-setup.blade.php
-          test "$(psql -At -h 127.0.0.1 -U postgres -d icgu_test -c "select renewal_fee::int from icgu.membership_plans where code = 'individual'")" -eq 100000
-          test "$(psql -At -h 127.0.0.1 -U postgres -d icgu_test -c "select renewal_fee::int from icgu.membership_plans where code = 'student'")" -eq 50000
-          test "$(psql -At -h 127.0.0.1 -U postgres -d icgu_test -c "select renewal_fee::int from icgu.membership_plans where code = 'ngo-corporate'")" -eq 1000000
-          test "$(psql -At -h 127.0.0.1 -U postgres -d icgu_test -c "select renewal_fee::int from icgu.membership_plans where code = 'corporate'")" -eq 2000000
-          test "$(psql -At -h 127.0.0.1 -U postgres -d icgu_test -c "select renewal_fee::int from icgu.membership_plans where code = 'sme-corporate'")" -eq 1000000
+          test "$(psql -At -h 127.0.0.1 -U postgres -d icgu_test -c \"select renewal_fee::int from icgu.membership_plans where code = 'individual'\")" -eq 100000
+          test "$(psql -At -h 127.0.0.1 -U postgres -d icgu_test -c \"select renewal_fee::int from icgu.membership_plans where code = 'student'\")" -eq 50000
+          test "$(psql -At -h 127.0.0.1 -U postgres -d icgu_test -c \"select renewal_fee::int from icgu.membership_plans where code = 'ngo-corporate'\")" -eq 1000000
+          test "$(psql -At -h 127.0.0.1 -U postgres -d icgu_test -c \"select renewal_fee::int from icgu.membership_plans where code = 'corporate'\")" -eq 2000000
+          test "$(psql -At -h 127.0.0.1 -U postgres -d icgu_test -c \"select renewal_fee::int from icgu.membership_plans where code = 'sme-corporate'\")" -eq 1000000
           psql -v ON_ERROR_STOP=1 -h 127.0.0.1 -U postgres -d icgu_test -c '\d icgu.pilot_import_batches'
           psql -v ON_ERROR_STOP=1 -h 127.0.0.1 -U postgres -d icgu_test -c '\d icgu.pilot_import_rows'
           psql -v ON_ERROR_STOP=1 -h 127.0.0.1 -U postgres -d icgu_test -c '\d icgu.payment_requests'
