@@ -135,7 +135,7 @@ php artisan icgu:pilot-check --strict
 - `.invalid` prototype accounts;
 - no committed pilot import;
 - active members without plans, primary emails, or current periods;
-- CEO, Membership Officer, or Finance Officer not MFA-ready;
+- CEO, Membership Officer, or Finance Officer without a production-ready staff authenticator (enrolled TOTP MFA or an authorised `icgu.org` Google Workspace account when Google OAuth is fully configured);
 - unresolved MoMo manual-reconciliation items;
 - failed queue jobs.
 

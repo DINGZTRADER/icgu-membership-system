@@ -64,11 +64,16 @@ final class PilotReadinessCheck extends Command
             foreach (['ceo', 'membership-officer', 'finance-officer'] as $role) {
                 $ready = User::query()
                     ->where('is_active', true)
-                    ->whereNotNull('mfa_confirmed_at')
                     ->whereHas('roles', fn ($query) => $query->where('slug', $role))
-                    ->exists();
+                    ->get()
+                    ->contains(fn (User $user): bool => $user->hasReadyStaffAuthenticator());
 
-                $this->check($ready, 'Staff MFA: '.$role, "An active {$role} account must complete MFA before pilot launch.", $strict);
+                $this->check(
+                    $ready,
+                    'Staff authentication: '.$role,
+                    "An active {$role} account must have TOTP MFA enrolled or be eligible for the configured ICGU Google Workspace sign-in before pilot launch.",
+                    $strict,
+                );
             }
         } else {
             $this->pass('Staff MFA policy', 'Disabled for the controlled pilot; password-only staff login is permitted.');
