@@ -26,6 +26,9 @@ jobs:
           tools: composer:v2
           coverage: none
 
+      - name: Prepare environment for Composer hooks
+        run: cp .env.example .env
+
       - name: Resolve S3 dependency for PHP 8.3
         run: composer update league/flysystem-aws-s3-v3 symfony/filesystem --with-all-dependencies --no-interaction --no-progress
 
