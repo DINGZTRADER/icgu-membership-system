@@ -134,7 +134,8 @@ jobs:
           test "$(psql -At -h 127.0.0.1 -U postgres -d icgu_test -c 'select count(*) from icgu.roles')" -eq 7
           test "$(psql -At -h 127.0.0.1 -U postgres -d icgu_test -c 'select count(*) from icgu.permissions')" -eq 21
           test "$(psql -At -h 127.0.0.1 -U postgres -d icgu_test -c 'select count(*) from icgu.membership_plans')" -eq 5
-          test "$(psql -At -h 127.0.0.1 -U postgres -d icgu_test -c \"select count(*) from icgu.users u join icgu.role_user ru on ru.user_id=u.id join icgu.roles r on r.id=ru.role_id where lower(u.email)='sprint11.google@icgu.org' and u.is_active and r.slug='ceo'\")" -eq 1
+          GOOGLE_STAFF_COUNT="$(psql -At -h 127.0.0.1 -U postgres -d icgu_test -c "select count(*) from icgu.users u join icgu.role_user ru on ru.user_id = u.id join icgu.roles r on r.id = ru.role_id where lower(u.email) = 'sprint11.google@icgu.org' and u.is_active and r.slug = 'ceo'")"
+          test "$GOOGLE_STAFF_COUNT" -eq 1
           test -s public/css/member-portal.css
           test -s public/css/staff-admin.css
           test -s docs/PILOT_LAUNCH.md
@@ -166,11 +167,16 @@ jobs:
           grep -q 'qrcodejs/1.0.0/qrcode.min.js' resources/views/staff/mfa-setup.blade.php
           grep -q 'sha512-CNgIRecGo7nphbeZ04Sc13ka07paqdeTu0WR1IM4kNcpmBAUSHSQX0FslNhTDadL4O5SAGapGt4FodqL8My0mA==' resources/views/staff/mfa-setup.blade.php
           grep -q 'provisioningUri = @json' resources/views/staff/mfa-setup.blade.php
-          test "$(psql -At -h 127.0.0.1 -U postgres -d icgu_test -c \"select renewal_fee::int from icgu.membership_plans where code = 'individual'\")" -eq 100000
-          test "$(psql -At -h 127.0.0.1 -U postgres -d icgu_test -c \"select renewal_fee::int from icgu.membership_plans where code = 'student'\")" -eq 50000
-          test "$(psql -At -h 127.0.0.1 -U postgres -d icgu_test -c \"select renewal_fee::int from icgu.membership_plans where code = 'ngo-corporate'\")" -eq 1000000
-          test "$(psql -At -h 127.0.0.1 -U postgres -d icgu_test -c \"select renewal_fee::int from icgu.membership_plans where code = 'corporate'\")" -eq 2000000
-          test "$(psql -At -h 127.0.0.1 -U postgres -d icgu_test -c \"select renewal_fee::int from icgu.membership_plans where code = 'sme-corporate'\")" -eq 1000000
+          INDIVIDUAL_RENEWAL_FEE="$(psql -At -h 127.0.0.1 -U postgres -d icgu_test -c "select renewal_fee::int from icgu.membership_plans where code = 'individual'")"
+          STUDENT_RENEWAL_FEE="$(psql -At -h 127.0.0.1 -U postgres -d icgu_test -c "select renewal_fee::int from icgu.membership_plans where code = 'student'")"
+          NGO_RENEWAL_FEE="$(psql -At -h 127.0.0.1 -U postgres -d icgu_test -c "select renewal_fee::int from icgu.membership_plans where code = 'ngo-corporate'")"
+          CORPORATE_RENEWAL_FEE="$(psql -At -h 127.0.0.1 -U postgres -d icgu_test -c "select renewal_fee::int from icgu.membership_plans where code = 'corporate'")"
+          SME_RENEWAL_FEE="$(psql -At -h 127.0.0.1 -U postgres -d icgu_test -c "select renewal_fee::int from icgu.membership_plans where code = 'sme-corporate'")"
+          test "$INDIVIDUAL_RENEWAL_FEE" -eq 100000
+          test "$STUDENT_RENEWAL_FEE" -eq 50000
+          test "$NGO_RENEWAL_FEE" -eq 1000000
+          test "$CORPORATE_RENEWAL_FEE" -eq 2000000
+          test "$SME_RENEWAL_FEE" -eq 1000000
           psql -v ON_ERROR_STOP=1 -h 127.0.0.1 -U postgres -d icgu_test -c '\d icgu.pilot_import_batches'
           psql -v ON_ERROR_STOP=1 -h 127.0.0.1 -U postgres -d icgu_test -c '\d icgu.pilot_import_rows'
           psql -v ON_ERROR_STOP=1 -h 127.0.0.1 -U postgres -d icgu_test -c '\d icgu.payment_requests'
